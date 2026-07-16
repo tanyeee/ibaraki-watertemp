@@ -334,7 +334,7 @@ if (typeof module !== 'undefined' && module.exports) {
         return res.json();
       })
       .then(function (json) {
-        stationsConfig = json.series || [];
+        stationsConfig = (json.series || []).filter(function (s) { return !s.hidden; });
         return stationsConfig;
       });
   }

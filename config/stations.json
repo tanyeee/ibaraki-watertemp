@@ -32,7 +32,7 @@
       "group": "霞ヶ浦",
       "station_id": "403031283303091",
       "path": "data/river/403031283303091.json",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "kasumigaura_hirayama",
@@ -41,7 +41,7 @@
       "group": "霞ヶ浦",
       "station_id": "403031283303010",
       "path": "data/river/403031283303010.json",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "kitaura_yasuzuka",
@@ -50,7 +50,7 @@
       "group": "北浦",
       "station_id": "403031283303160",
       "path": "data/river/403031283303160.json",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "kitaura_kamayaoki",
@@ -59,7 +59,7 @@
       "group": "北浦",
       "station_id": "403031283303181",
       "path": "data/river/403031283303181.json",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "kitaura_jinguubashi",
@@ -68,7 +68,7 @@
       "group": "北浦",
       "station_id": "403031283303191",
       "path": "data/river/403031283303191.json",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "tonegawa_up_upper",
@@ -86,7 +86,8 @@
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
-      "path": "data/river/403031283303142.json"
+      "path": "data/river/403031283303142.json",
+      "hidden": true
     },
     {
       "id": "tonegawa_up_lower",
@@ -95,7 +96,8 @@
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
-      "path": "data/river/403031283303143.json"
+      "path": "data/river/403031283303143.json",
+      "hidden": true
     },
     {
       "id": "tonegawa_down_upper",
@@ -113,7 +115,8 @@
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
-      "path": "data/river/403031283303145.json"
+      "path": "data/river/403031283303145.json",
+      "hidden": true
     },
     {
       "id": "tonegawa_down_lower",
@@ -122,7 +125,8 @@
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
-      "path": "data/river/403031283303146.json"
+      "path": "data/river/403031283303146.json",
+      "hidden": true
     }
   ]
 }
