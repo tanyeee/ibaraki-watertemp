@@ -81,7 +81,7 @@
     {
       "id": "tonegawa_up_upper",
       "station_id": "403031283303141",
-      "name": "上流・上層(利根川河口堰)",
+      "name": "利根川 河口堰上流",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": true,
@@ -110,7 +110,7 @@
     {
       "id": "tonegawa_down_upper",
       "station_id": "403031283303144",
-      "name": "下流・上層(利根川河口堰)",
+      "name": "利根川 河口堰下流",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": true,

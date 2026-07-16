@@ -299,6 +299,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var selectedYearlyYears = [];
   var yearlyYearsInitialized = false;
   var darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
 
   // ---- ユーティリティ ----
@@ -360,7 +361,10 @@ if (typeof module !== 'undefined' && module.exports) {
       legend: {
         display: true,
         position: 'bottom',
-        labels: { color: theme.text }
+        labels: {
+          color: theme.text,
+          usePointStyle: true
+        }
       },
       tooltip: {
         backgroundColor: theme.tooltipBg,
@@ -698,7 +702,7 @@ if (typeof module !== 'undefined' && module.exports) {
       label: station.name,
       data: points,
       showLine: false,
-      pointRadius: 2,
+      pointRadius: narrowScreenMedia.matches ? 1.4 : 2,
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
@@ -970,7 +974,7 @@ if (typeof module !== 'undefined' && module.exports) {
         label: 'その他の年',
         data: backgroundPoints,
         showLine: false,
-        pointRadius: 2,
+        pointRadius: narrowScreenMedia.matches ? 1.4 : 2,
         pointHoverRadius: 3,
         backgroundColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT,
         borderColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT
@@ -986,7 +990,7 @@ if (typeof module !== 'undefined' && module.exports) {
         label: year + '年',
         data: points,
         showLine: false,
-        pointRadius: 3,
+        pointRadius: narrowScreenMedia.matches ? 1.4 : 3,
         pointHoverRadius: 5,
         backgroundColor: color,
         borderColor: color
