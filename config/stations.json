@@ -2,7 +2,7 @@
   "series": [
     {
       "id": "sea_area137",
-      "name": "茨城県北(海面水温)",
+      "name": "茨城県北 海面水温",
       "kind": "sea",
       "group": "海",
       "path": "data/sea/area137.json",
@@ -10,7 +10,7 @@
     },
     {
       "id": "sea_area138",
-      "name": "茨城県南(海面水温)",
+      "name": "茨城県南 海面水温",
       "kind": "sea",
       "group": "海",
       "path": "data/sea/area138.json",
@@ -26,7 +26,7 @@
     },
     {
       "id": "kasumigaura_koshin",
-      "name": "湖心(霞ヶ浦)",
+      "name": "霞ヶ浦 湖心",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303071",
@@ -35,7 +35,7 @@
     },
     {
       "id": "kasumigaura_asou",
-      "name": "麻生沖(霞ヶ浦)",
+      "name": "霞ヶ浦 麻生沖",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303091",
@@ -44,7 +44,7 @@
     },
     {
       "id": "kasumigaura_hirayama",
-      "name": "平山(霞ヶ浦)",
+      "name": "霞ヶ浦 平山",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303010",
@@ -53,7 +53,7 @@
     },
     {
       "id": "kitaura_yasuzuka",
-      "name": "安塚(北浦)",
+      "name": "北浦 安塚",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303160",
@@ -62,7 +62,7 @@
     },
     {
       "id": "kitaura_kamayaoki",
-      "name": "釜谷沖(北浦)",
+      "name": "北浦 釜谷沖",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303181",
@@ -71,7 +71,7 @@
     },
     {
       "id": "kitaura_jinguubashi",
-      "name": "神宮橋(北浦)",
+      "name": "北浦 神宮橋",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303191",
