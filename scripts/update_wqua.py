@@ -167,11 +167,16 @@ def update_station(
             f"{len(daily)} 日分取得(累計 {len(merged)} 件)"
         )
         # 長時間のブートストラップでも中断時に進捗が残るよう、都度書き戻す。
+        preserved_backfill = {
+            key: existing_payload.get("meta", {})[key]
+            for key in ("backfill_cursor", "backfill_done")
+            if key in existing_payload.get("meta", {})
+        }
         meta = build_meta(
             "river_go_jp_wqua_kind5",
             f"河川・湖沼水温(観測所 {station_id})",
             merged,
-            extra={"station_id": station_id},
+            extra={"station_id": station_id, **preserved_backfill},
         )
         write_json(output, meta, merged)
         if i < len(windows) - 1:

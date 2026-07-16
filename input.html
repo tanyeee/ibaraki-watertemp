@@ -6,12 +6,32 @@
 <title>水温を記録する | 茨城 水温比較</title>
 <style>
   :root {
+    color-scheme: light;
     --color-bg: #f5f7f9;
     --color-surface: #ffffff;
+    --color-control: #f5f7f9;
     --color-text: #222222;
     --color-muted: #666666;
     --color-border: #dde2e6;
     --color-accent: #0072B2;
+    --color-accent-contrast: #ffffff;
+    --color-error: #c62828;
+    --color-focus-ring: rgba(0, 114, 178, 0.25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --color-bg: #11161b;
+      --color-surface: #1b2229;
+      --color-control: #252e37;
+      --color-text: #edf1f5;
+      --color-muted: #aab4be;
+      --color-border: #3a4651;
+      --color-accent: #56B4E9;
+      --color-accent-contrast: #07141c;
+      --color-error: #ff8a80;
+      --color-focus-ring: rgba(86, 180, 233, 0.35);
+    }
   }
   * { box-sizing: border-box; }
   body {
@@ -64,8 +84,20 @@
     padding: 10px;
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    background: var(--color-bg);
+    background: var(--color-control);
     color: var(--color-text);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-muted);
+    opacity: 1;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible,
+  .back-link:focus-visible {
+    outline: 3px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
   textarea {
     font-size: 0.95rem;
@@ -82,7 +114,7 @@
     appearance: none;
     border: none;
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-accent-contrast);
     font-size: 1.05rem;
     font-weight: 600;
     padding: 14px;
@@ -119,7 +151,7 @@
     margin: 0;
     min-height: 1.5em;
     font-size: 0.85rem;
-    color: #c62828;
+    color: var(--color-error);
   }
 </style>
 </head>

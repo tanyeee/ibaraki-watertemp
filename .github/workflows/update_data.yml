@@ -46,6 +46,17 @@ jobs:
             python scripts/update_wqua.py --station "$station_id" --days 14
           done
 
+      - name: Backfill river/lake water temperature (enabled stations)
+        run: |
+          station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
+          if [ -z "$station_ids" ]; then
+            echo "no enabled river stations"
+          fi
+          for station_id in $station_ids; do
+            echo "=== backfilling station $station_id ==="
+            python scripts/backfill_wqua.py --station "$station_id" --windows 4 --floor 20160101
+          done
+
       - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"

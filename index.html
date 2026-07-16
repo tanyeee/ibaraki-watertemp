@@ -22,11 +22,21 @@
   </nav>
 
   <section id="panel-timeseries" class="panel" role="tabpanel" aria-labelledby="tab-timeseries">
-    <div class="controls">
-      <div class="control-group" id="series-checkboxes">
-        <!-- 系列チェックボックスはJSで生成 -->
+    <div class="controls timeseries-controls">
+      <div class="series-presets" aria-label="系列プリセット">
+        <span class="control-label">プリセット:</span>
+        <div class="preset-buttons" id="series-presets">
+          <button type="button" data-preset="representative">代表地点</button>
+          <button type="button" data-preset="tonegawa">利根川6局</button>
+          <button type="button" data-preset="lakes">湖沼</button>
+          <button type="button" data-preset="none">全て解除</button>
+        </div>
+      </div>
+      <div class="series-groups" id="series-checkboxes">
+        <!-- groupごとの系列チェックボックスはJSで生成 -->
       </div>
       <div class="control-group range-buttons" id="range-buttons">
+        <span class="control-label">表示期間:</span>
         <button data-range="1m">1ヶ月</button>
         <button data-range="3m">3ヶ月</button>
         <button data-range="1y" class="active">1年</button>
@@ -40,11 +50,22 @@
   </section>
 
   <section id="panel-yearly" class="panel hidden" role="tabpanel" aria-labelledby="tab-yearly">
-    <div class="controls">
+    <div class="controls yearly-controls">
       <div class="control-group">
         <label for="yearly-series-select">系列を選択:</label>
         <select id="yearly-series-select"></select>
       </div>
+      <div class="control-group yearly-add-control">
+        <label for="yearly-year-select">年を追加:</label>
+        <select id="yearly-year-select" aria-describedby="yearly-year-help"></select>
+        <button type="button" id="yearly-add-button">追加</button>
+      </div>
+      <p id="yearly-year-help" class="control-help">初期表示は直近3年。過去の年を必要な分だけ追加できます。</p>
+      <div id="yearly-selected-years" class="year-chips" aria-label="表示中の年" aria-live="polite"></div>
+      <label class="yearly-background-toggle">
+        <input type="checkbox" id="yearly-show-all">
+        <span>全年をうっすら表示</span>
+      </label>
     </div>
     <div class="chart-wrap">
       <canvas id="chart-yearly"></canvas>
