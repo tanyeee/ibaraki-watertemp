@@ -57,6 +57,7 @@
   }
   input[type="date"],
   input[type="number"],
+  input[type="password"],
   textarea {
     width: 100%;
     font-size: 1.1rem;
@@ -105,42 +106,125 @@
     min-height: 1.2em;
     margin-top: -4px;
   }
+  .gate[hidden],
+  .app-content[hidden] {
+    display: none;
+  }
+  .gate-description {
+    margin: 0 0 14px;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+  .gate-error {
+    margin: 0;
+    min-height: 1.5em;
+    font-size: 0.85rem;
+    color: #c62828;
+  }
 </style>
 </head>
 <body>
 <main>
-  <a class="back-link" href="index.html">&larr; グラフを見る</a>
-  <h1>水温を記録する</h1>
+  <section id="passcode-gate" class="gate" aria-labelledby="gate-title">
+    <h1 id="gate-title">パスコードを入力</h1>
+    <div class="card">
+      <p class="gate-description">水温記録フォームを開くには、4桁のパスコードを入力してください。</p>
+      <form id="passcode-form">
+        <div>
+          <label for="passcode-input">パスコード</label>
+          <input type="password" id="passcode-input" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" required autofocus>
+        </div>
+        <p id="passcode-error" class="gate-error" role="alert" aria-live="polite"></p>
+        <button type="submit">開く</button>
+      </form>
+    </div>
+  </section>
 
-  <div class="card">
-    <form id="temp-form">
-      <div>
-        <label for="date-input">日付</label>
-        <input type="date" id="date-input" name="date" required>
-      </div>
-      <div>
-        <label for="value-input">水温<span class="unit-hint">(°C)</span></label>
-        <input type="number" id="value-input" name="value" step="0.1" inputmode="decimal" required>
-      </div>
-      <div>
-        <label for="note-input">備考<span class="unit-hint">(任意)</span></label>
-        <textarea id="note-input" name="note" placeholder="例: 前日に大雨、濁りあり など"></textarea>
-      </div>
-      <p id="status-text" class="status-text"></p>
-      <button type="submit">GitHubで記録する</button>
-    </form>
-  </div>
+  <div id="app-content" class="app-content" hidden>
+    <a class="back-link" href="index.html">&larr; グラフを見る</a>
+    <h1>水温を記録する</h1>
 
-  <div class="card help">
-    <strong>使い方</strong>
-    <ol>
-      <li>日付と水温を入力して「GitHubで記録する」をタップします。</li>
-      <li>GitHubのIssue作成画面が新しいタブで開くので、内容を確認してそのまま「Submit new issue」をタップします。</li>
-      <li>数分後、自動的にデータが追記されグラフに反映されます(Issueはコメントの上で自動クローズされます)。</li>
-    </ol>
-    GitHubへのログインが必要です(リポジトリオーナーのみ記録可能)。
+    <div class="card">
+      <form id="temp-form">
+        <div>
+          <label for="date-input">日付</label>
+          <input type="date" id="date-input" name="date" required>
+        </div>
+        <div>
+          <label for="value-input">水温<span class="unit-hint">(°C)</span></label>
+          <input type="number" id="value-input" name="value" step="0.1" inputmode="decimal" required>
+        </div>
+        <div>
+          <label for="note-input">備考<span class="unit-hint">(任意)</span></label>
+          <textarea id="note-input" name="note" placeholder="例: 前日に大雨、濁りあり など"></textarea>
+        </div>
+        <p id="status-text" class="status-text"></p>
+        <button type="submit">GitHubで記録する</button>
+      </form>
+    </div>
+
+    <div class="card help">
+      <strong>使い方</strong>
+      <ol>
+        <li>日付と水温を入力して「GitHubで記録する」をタップします。</li>
+        <li>GitHubのIssue作成画面が新しいタブで開くので、内容を確認してそのまま「Submit new issue」をタップします。</li>
+        <li>数分後、自動的にデータが追記されグラフに反映されます(Issueはコメントの上で自動クローズされます)。</li>
+      </ol>
+      GitHubへのログインが必要です(リポジトリオーナーのみ記録可能)。
+    </div>
   </div>
 </main>
+
+<script>
+(function () {
+  var GATE_STORAGE_KEY = "tapwater_gate_ok";
+  var PASSCODE_HASH = "c91bcd9ef3968cb25256c8fda7b1613b6a3cdddb7513ca818193e4daac5f00e1";
+
+  var gate = document.getElementById("passcode-gate");
+  var appContent = document.getElementById("app-content");
+  var passcodeForm = document.getElementById("passcode-form");
+  var passcodeInput = document.getElementById("passcode-input");
+  var passcodeError = document.getElementById("passcode-error");
+
+  function showApp() {
+    gate.hidden = true;
+    appContent.hidden = false;
+  }
+
+  try {
+    if (window.localStorage.getItem(GATE_STORAGE_KEY) === "1") {
+      showApp();
+    }
+  } catch (e) {
+    // localStorageが使えない環境では毎回パスコードを確認する
+  }
+
+  passcodeForm.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    passcodeError.textContent = "";
+
+    var data = new TextEncoder().encode(passcodeInput.value);
+    var digest = await window.crypto.subtle.digest("SHA-256", data);
+    var hash = Array.from(new Uint8Array(digest), function (byte) {
+      return byte.toString(16).padStart(2, "0");
+    }).join("");
+
+    if (hash === PASSCODE_HASH) {
+      try {
+        window.localStorage.setItem(GATE_STORAGE_KEY, "1");
+      } catch (e) {
+        // localStorageが使えなくても現在のページではフォームを表示する
+      }
+      showApp();
+      return;
+    }
+
+    passcodeError.textContent = "パスコードが違います";
+    passcodeInput.value = "";
+    passcodeInput.focus();
+  });
+})();
+</script>
 
 <script>
 (function () {
