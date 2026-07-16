@@ -1,0 +1,58 @@
+name: update_data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎日 21:10 UTC (= JST 6:10)
+    - cron: "10 21 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watertemp-data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update sea surface temperature (area137)
+        run: |
+          python scripts/update_sea.py
+
+      - name: Update river/lake water temperature (enabled stations)
+        run: |
+          station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
+          if [ -z "$station_ids" ]; then
+            echo "no enabled river stations"
+          fi
+          for station_id in $station_ids; do
+            echo "=== updating station $station_id ==="
+            python scripts/update_wqua.py --station "$station_id" --days 14
+          done
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sea data/river
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto update water temperature data"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push
+          fi

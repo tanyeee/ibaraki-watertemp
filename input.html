@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水温を記録する | 茨城 水温比較</title>
+<style>
+  :root {
+    --color-bg: #f5f7f9;
+    --color-surface: #ffffff;
+    --color-text: #222222;
+    --color-muted: #666666;
+    --color-border: #dde2e6;
+    --color-accent: #0072B2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.2rem;
+    margin: 8px 0 4px;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+  input[type="date"],
+  input[type="number"],
+  textarea {
+    width: 100%;
+    font-size: 1.1rem;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+  textarea {
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 3.2em;
+  }
+  .unit-hint {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    font-weight: normal;
+    margin-left: 4px;
+  }
+  button[type="submit"] {
+    appearance: none;
+    border: none;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 600;
+    padding: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button[type="submit"]:active {
+    opacity: 0.85;
+  }
+  .help {
+    font-size: 0.82rem;
+    color: var(--color-muted);
+  }
+  .help ol {
+    margin: 4px 0 0;
+    padding-left: 1.2em;
+  }
+  .status-text {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    min-height: 1.2em;
+    margin-top: -4px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="back-link" href="index.html">&larr; グラフを見る</a>
+  <h1>水温を記録する</h1>
+
+  <div class="card">
+    <form id="temp-form">
+      <div>
+        <label for="date-input">日付</label>
+        <input type="date" id="date-input" name="date" required>
+      </div>
+      <div>
+        <label for="value-input">水温<span class="unit-hint">(°C)</span></label>
+        <input type="number" id="value-input" name="value" step="0.1" inputmode="decimal" required>
+      </div>
+      <div>
+        <label for="note-input">備考<span class="unit-hint">(任意)</span></label>
+        <textarea id="note-input" name="note" placeholder="例: 前日に大雨、濁りあり など"></textarea>
+      </div>
+      <p id="status-text" class="status-text"></p>
+      <button type="submit">GitHubで記録する</button>
+    </form>
+  </div>
+
+  <div class="card help">
+    <strong>使い方</strong>
+    <ol>
+      <li>日付と水温を入力して「GitHubで記録する」をタップします。</li>
+      <li>GitHubのIssue作成画面が新しいタブで開くので、内容を確認してそのまま「Submit new issue」をタップします。</li>
+      <li>数分後、自動的にデータが追記されグラフに反映されます(Issueはコメントの上で自動クローズされます)。</li>
+    </ol>
+    GitHubへのログインが必要です(リポジトリオーナーのみ記録可能)。
+  </div>
+</main>
+
+<script>
+(function () {
+  var REPO_URL = "https://github.com/tanyeee/ibaraki-watertemp";
+  var STORAGE_KEY = "tapwater_last_value";
+
+  var form = document.getElementById("temp-form");
+  var dateInput = document.getElementById("date-input");
+  var valueInput = document.getElementById("value-input");
+  var noteInput = document.getElementById("note-input");
+  var statusText = document.getElementById("status-text");
+
+  function todayJst() {
+    // JST(UTC+9)基準の「今日」をYYYY-MM-DD形式で返す
+    var now = new Date();
+    var jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    var y = jst.getUTCFullYear();
+    var m = String(jst.getUTCMonth() + 1).padStart(2, "0");
+    var d = String(jst.getUTCDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  dateInput.value = todayJst();
+
+  var lastValue = null;
+  try {
+    lastValue = window.localStorage.getItem(STORAGE_KEY);
+  } catch (e) {
+    lastValue = null;
+  }
+  if (lastValue) {
+    valueInput.placeholder = "前回: " + lastValue + "°C";
+  }
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    statusText.textContent = "";
+
+    var dateStr = dateInput.value;
+    var valueStr = valueInput.value;
+    var note = noteInput.value.trim();
+
+    if (!dateStr) {
+      statusText.textContent = "日付を入力してください。";
+      return;
+    }
+    if (valueStr === "" || isNaN(Number(valueStr))) {
+      statusText.textContent = "水温を数値で入力してください。";
+      return;
+    }
+
+    var value = Number(valueStr);
+    var title = "temp: " + dateStr + " " + value;
+    var body = note ? ("note: " + note) : "";
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(value));
+    } catch (e) {
+      // localStorageが使えない環境では無視
+    }
+
+    var issueUrl =
+      REPO_URL +
+      "/issues/new?title=" +
+      encodeURIComponent(title) +
+      "&body=" +
+      encodeURIComponent(body);
+
+    window.open(issueUrl, "_blank", "noopener");
+    statusText.textContent = "GitHubのIssue作成画面を開きました。内容を確認して送信してください。";
+  });
+})();
+</script>
+</body>
+</html>

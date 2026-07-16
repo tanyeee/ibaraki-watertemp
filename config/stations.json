@@ -1,0 +1,12 @@
+{
+  "series": [
+    {"id": "sea_area137", "name": "海面水温(茨城県北部沿岸)", "kind": "sea", "path": "data/sea/area137.json", "enabled": true},
+    {"id": "tapwater", "name": "水道水温(久慈川水系)", "kind": "tapwater", "path": "data/tapwater/suidousui.json", "enabled": true},
+    {"id": "kasumigaura_koshin", "name": "霞ヶ浦(湖心)", "kind": "river", "station_id": "403031283303071", "path": "data/river/403031283303071.json", "enabled": true},
+    {"id": "kasumigaura_asou", "name": "霞ヶ浦(麻生沖)", "kind": "river", "station_id": "403031283303091", "path": "data/river/403031283303091.json", "enabled": false},
+    {"id": "kasumigaura_hirayama", "name": "霞ヶ浦(平山)", "kind": "river", "station_id": "403031283303010", "path": "data/river/403031283303010.json", "enabled": false},
+    {"id": "kitaura_yasuzuka", "name": "北浦(安塚)", "kind": "river", "station_id": "403031283303160", "path": "data/river/403031283303160.json", "enabled": false},
+    {"id": "kitaura_kamayaoki", "name": "北浦(釜谷沖)", "kind": "river", "station_id": "403031283303181", "path": "data/river/403031283303181.json", "enabled": false},
+    {"id": "kitaura_jinguubashi", "name": "北浦(神宮橋)", "kind": "river", "station_id": "403031283303191", "path": "data/river/403031283303191.json", "enabled": false}
+  ]
+}

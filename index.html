@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>茨城 水温比較</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>茨城 水温比較</h1>
+  <p><a href="input.html">水温を記録する</a></p>
+  <div id="latest-cards" class="latest-cards" aria-live="polite">
+    <p class="loading-text">データ読み込み中...</p>
+  </div>
+</header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" id="tab-timeseries" role="tab" aria-selected="true" aria-controls="panel-timeseries" data-mode="timeseries">時系列モード</button>
+    <button class="tab-btn" id="tab-yearly" role="tab" aria-selected="false" aria-controls="panel-yearly" data-mode="yearly">年比較モード</button>
+  </nav>
+
+  <section id="panel-timeseries" class="panel" role="tabpanel" aria-labelledby="tab-timeseries">
+    <div class="controls">
+      <div class="control-group" id="series-checkboxes">
+        <!-- 系列チェックボックスはJSで生成 -->
+      </div>
+      <div class="control-group range-buttons" id="range-buttons">
+        <button data-range="1m">1ヶ月</button>
+        <button data-range="3m">3ヶ月</button>
+        <button data-range="1y" class="active">1年</button>
+        <button data-range="5y">5年</button>
+        <button data-range="all">全期間</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-timeseries"></canvas>
+    </div>
+  </section>
+
+  <section id="panel-yearly" class="panel hidden" role="tabpanel" aria-labelledby="tab-yearly">
+    <div class="controls">
+      <div class="control-group">
+        <label for="yearly-series-select">系列を選択:</label>
+        <select id="yearly-series-select"></select>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-yearly"></canvas>
+    </div>
+  </section>
+
+  <p id="global-status" class="status-text"></p>
+</main>
+
+<footer class="app-footer">
+  <p>
+    データ出典: 海面水温: 気象庁 沿岸域の海面水温情報 / 河川・湖沼: 国土交通省 水文水質データベース / 水道水温: 個人測定
+  </p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@2/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script src="app.js"></script>
+</body>
+</html>

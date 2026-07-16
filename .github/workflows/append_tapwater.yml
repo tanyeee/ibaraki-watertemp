@@ -1,0 +1,85 @@
+name: append_tapwater
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: tapwater-append
+  cancel-in-progress: false
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    # リポジトリオーナーが立てた「temp: ...」タイトルのIssueのみ処理する。
+    # 条件を満たさない場合はジョブ自体をスキップする(他ユーザーのIssueは放置)。
+    if: |
+      github.event.issue.user.login == 'tanyeee' &&
+      startsWith(github.event.issue.title, 'temp:')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run append_tapwater.py
+        id: append
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set +e
+          OUTPUT=$(python scripts/append_tapwater.py --title "$ISSUE_TITLE" --body "$ISSUE_BODY" 2>err.txt)
+          STATUS=$?
+          set -e
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          DELIM="TAPWATER_EOF_$(python -c 'import uuid; print(uuid.uuid4().hex)')"
+          {
+            echo "message<<$DELIM"
+            if [ "$STATUS" -eq 0 ]; then
+              echo "$OUTPUT"
+            else
+              cat err.txt
+            fi
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+          rm -f err.txt
+
+      - name: Commit and push data update
+        if: steps.append.outputs.status == '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/tapwater
+          if ! git diff --cached --quiet; then
+            git commit -m "Add tapwater temperature record via Issue #${{ github.event.issue.number }}"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push
+          fi
+
+      - name: Comment and close (success)
+        if: steps.append.outputs.status == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MESSAGE: ${{ steps.append.outputs.message }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --body "$MESSAGE"
+          gh issue close "${{ github.event.issue.number }}"
+
+      - name: Comment and close (invalid)
+        if: steps.append.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MESSAGE: ${{ steps.append.outputs.message }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --body "$MESSAGE"
+          gh issue edit "${{ github.event.issue.number }}" --add-label "invalid" || true
+          gh issue close "${{ github.event.issue.number }}"

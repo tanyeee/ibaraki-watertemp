@@ -1,0 +1,202 @@
+:root {
+  --color-bg: #f5f7f9;
+  --color-surface: #ffffff;
+  --color-text: #222222;
+  --color-muted: #666666;
+  --color-border: #dde2e6;
+  --color-accent: #0072B2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.app-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 16px;
+}
+
+.app-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.latest-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.loading-text {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.latest-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  min-width: 130px;
+}
+
+.latest-card .card-name {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.latest-card .card-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.latest-card .card-date {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  margin-left: 4px;
+}
+
+.latest-card.no-data {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 16px 32px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: var(--color-muted);
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.control-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.series-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-bg);
+}
+
+.series-checkbox .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.range-buttons button,
+#panel-yearly select {
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.range-buttons button.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.chart-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  height: 60vh;
+  min-height: 320px;
+  position: relative;
+}
+
+.status-text {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  min-height: 1.2em;
+}
+
+.app-footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 600px) {
+  .app-header h1 {
+    font-size: 1.05rem;
+  }
+  .latest-card {
+    min-width: 100px;
+    font-size: 0.72rem;
+  }
+  .chart-wrap {
+    height: 50vh;
+    padding: 6px;
+  }
+  .controls {
+    padding: 8px 10px;
+  }
+}
