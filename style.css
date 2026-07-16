@@ -107,10 +107,20 @@ a {
   font-weight: 700;
 }
 
+.latest-card .card-reading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
 .latest-card .card-date {
   color: var(--color-muted);
   font-size: 0.72rem;
-  margin-left: 4px;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .card-date-short {
@@ -687,7 +697,7 @@ main {
     white-space: nowrap;
   }
   .latest-card .card-date {
-    margin-left: 2px;
+    margin-left: auto;
     font-size: 0.62rem;
     white-space: nowrap;
   }
@@ -701,6 +711,10 @@ main {
     height: min(260px, 70vw);
     min-height: 0;
     padding: 6px;
+  }
+  .chart-wrap-timeseries {
+    /* 地点数の多い凡例が占める分を確保し、年比較とプロット領域の比率を揃える。 */
+    height: min(308px, calc(70vw + 48px));
   }
   .controls {
     padding: 8px 10px;

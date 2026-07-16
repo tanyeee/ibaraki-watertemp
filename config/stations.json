@@ -2,10 +2,18 @@
   "series": [
     {
       "id": "sea_area137",
-      "name": "海面水温(茨城県北部沿岸)",
+      "name": "茨城県北(海面水温)",
       "kind": "sea",
       "group": "海",
       "path": "data/sea/area137.json",
+      "enabled": true
+    },
+    {
+      "id": "sea_area138",
+      "name": "茨城県南(海面水温)",
+      "kind": "sea",
+      "group": "海",
+      "path": "data/sea/area138.json",
       "enabled": true
     },
     {
@@ -18,7 +26,7 @@
     },
     {
       "id": "kasumigaura_koshin",
-      "name": "霞ヶ浦(湖心)",
+      "name": "湖心(霞ヶ浦)",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303071",
@@ -27,7 +35,7 @@
     },
     {
       "id": "kasumigaura_asou",
-      "name": "霞ヶ浦(麻生沖)",
+      "name": "麻生沖(霞ヶ浦)",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303091",
@@ -36,7 +44,7 @@
     },
     {
       "id": "kasumigaura_hirayama",
-      "name": "霞ヶ浦(平山)",
+      "name": "平山(霞ヶ浦)",
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303010",
@@ -45,7 +53,7 @@
     },
     {
       "id": "kitaura_yasuzuka",
-      "name": "北浦(安塚)",
+      "name": "安塚(北浦)",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303160",
@@ -54,7 +62,7 @@
     },
     {
       "id": "kitaura_kamayaoki",
-      "name": "北浦(釜谷沖)",
+      "name": "釜谷沖(北浦)",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303181",
@@ -63,7 +71,7 @@
     },
     {
       "id": "kitaura_jinguubashi",
-      "name": "北浦(神宮橋)",
+      "name": "神宮橋(北浦)",
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303191",
@@ -73,7 +81,7 @@
     {
       "id": "tonegawa_up_upper",
       "station_id": "403031283303141",
-      "name": "利根川河口堰(上流・上層)",
+      "name": "上流・上層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": true,
@@ -82,7 +90,7 @@
     {
       "id": "tonegawa_up_middle",
       "station_id": "403031283303142",
-      "name": "利根川河口堰(上流・中層)",
+      "name": "上流・中層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
@@ -92,7 +100,7 @@
     {
       "id": "tonegawa_up_lower",
       "station_id": "403031283303143",
-      "name": "利根川河口堰(上流・下層)",
+      "name": "上流・下層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
@@ -102,7 +110,7 @@
     {
       "id": "tonegawa_down_upper",
       "station_id": "403031283303144",
-      "name": "利根川河口堰(下流・上層)",
+      "name": "下流・上層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": true,
@@ -111,7 +119,7 @@
     {
       "id": "tonegawa_down_middle",
       "station_id": "403031283303145",
-      "name": "利根川河口堰(下流・中層)",
+      "name": "下流・中層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,
@@ -121,7 +129,7 @@
     {
       "id": "tonegawa_down_lower",
       "station_id": "403031283303146",
-      "name": "利根川河口堰(下流・下層)",
+      "name": "下流・下層(利根川河口堰)",
       "kind": "river",
       "group": "利根川河口堰",
       "enabled": false,

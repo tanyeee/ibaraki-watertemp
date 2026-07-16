@@ -217,24 +217,63 @@ var SeriesSelectionLogic = (function () {
   };
 })();
 
+// 地点比較の色は、設定順に各 group 内のパレットを割り当てる。
+// DOMに依存させず、Nodeでもライト/ダーク双方を検証可能にする。
+var ColorAssignmentLogic = (function () {
+  'use strict';
+
+  var PALETTES = {
+    light: {
+      '海': ['#0072B2', '#56B4E9'],
+      '水道水': ['#E69F00'],
+      '霞ヶ浦': ['#009E73', '#4CAF50', '#8BC34A'],
+      '北浦': ['#9467BD', '#CC79A7', '#E377C2'],
+      '利根川河口堰': ['#D55E00', '#FF9E4A'],
+      'その他': ['#0072B2', '#E69F00', '#009E73', '#CC79A7']
+    },
+    dark: {
+      '海': ['#56B4E9', '#90CAF9'],
+      '水道水': ['#E6C229'],
+      '霞ヶ浦': ['#4DD0A8', '#81C784', '#AED581'],
+      '北浦': ['#B39DDB', '#E88AC5', '#F48FB1'],
+      '利根川河口堰': ['#FF8A65', '#E25822'],
+      'その他': ['#56B4E9', '#FFB74D', '#4DD0A8', '#E88AC5']
+    }
+  };
+
+  function assignColors(list, darkMode) {
+    var colorById = {};
+    var groupIndexes = {};
+    var paletteSet = darkMode ? PALETTES.dark : PALETTES.light;
+
+    (list || []).forEach(function (station) {
+      var group = station.group || 'その他';
+      var palette = paletteSet[group] || paletteSet['その他'];
+      var index = groupIndexes[group] || 0;
+      colorById[station.id] = palette[index % palette.length];
+      groupIndexes[group] = index + 1;
+    });
+
+    return colorById;
+  }
+
+  return {
+    PALETTES: PALETTES,
+    assignColors: assignColors
+  };
+})();
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = YearlyComparisonLogic;
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
   module.exports.DateRangeLogic = DateRangeLogic;
+  module.exports.ColorAssignmentLogic = ColorAssignmentLogic;
 }
 
 (function () {
   'use strict';
 
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
-
-  // ---- 色覚多様性に配慮したパレット(Okabe-Ito) ----
-  var COLOR_SEA_LIGHT = '#0072B2';
-  var COLOR_SEA_DARK = '#56B4E9';
-  var COLOR_TAPWATER = '#E69F00';
-  var COLOR_KASUMIGAURA = '#009E73';
-  var EXTRA_PALETTE_LIGHT = ['#CC79A7', '#56B4E9', '#D55E00', '#F0E442'];
-  var EXTRA_PALETTE_DARK = ['#CC79A7', '#0072B2', '#D55E00', '#F0E442'];
 
   // 年比較モードでの年別色(選択順。4色目以降も無彩色にはしない)
   var YEARLY_PALETTE_LIGHT = [
@@ -281,38 +320,9 @@ if (typeof module !== 'undefined' && module.exports) {
     return (d.getMonth() + 1) + '月' + d.getDate() + '日 (' + d.getFullYear() + '年)';
   }
 
-  // 系列一覧から色を割り当てる
-  // 海=青、水道水=橙、霞ヶ浦(名前に含む最初の系列)=緑、それ以降は残りのパレットを順に割当
+  // 系列一覧から group ごとのパレットで色を割り当てる
   function assignColors(list) {
-    var colorById = {};
-    var colorSea = isDarkMode ? COLOR_SEA_DARK : COLOR_SEA_LIGHT;
-    var extraPalette = isDarkMode ? EXTRA_PALETTE_DARK : EXTRA_PALETTE_LIGHT;
-    var seaDone = false;
-    var tapDone = false;
-    var kasumiDone = false;
-    var extraIdx = 0;
-
-    list.forEach(function (s) {
-      if (!seaDone && s.kind === 'sea') {
-        colorById[s.id] = colorSea;
-        seaDone = true;
-        return;
-      }
-      if (!tapDone && s.kind === 'tapwater') {
-        colorById[s.id] = COLOR_TAPWATER;
-        tapDone = true;
-        return;
-      }
-      if (!kasumiDone && s.name && s.name.indexOf('霞ヶ浦') !== -1) {
-        colorById[s.id] = COLOR_KASUMIGAURA;
-        kasumiDone = true;
-        return;
-      }
-      colorById[s.id] = extraPalette[extraIdx % extraPalette.length];
-      extraIdx += 1;
-    });
-
-    return colorById;
+    return ColorAssignmentLogic.assignColors(list, isDarkMode);
   }
 
   function chartTheme() {
@@ -462,10 +472,12 @@ if (typeof module !== 'undefined' && module.exports) {
           card.style.borderLeftColor = entry.color;
           card.innerHTML =
             '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
-            '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
-            '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
-            '<span class="card-date card-date-short">' +
-              escapeHtml(shortDate(last.date)) + '</span>';
+            '<span class="card-reading">' +
+              '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
+              '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
+              '<span class="card-date card-date-short">' +
+                escapeHtml(shortDate(last.date)) + '</span>' +
+            '</span>';
         } else {
           card.className = 'latest-card no-data';
           card.innerHTML =
@@ -710,7 +722,7 @@ if (typeof module !== 'undefined' && module.exports) {
       type: 'time',
       time: {
         unit: 'month',
-        displayFormats: { month: 'yyyy/M' },
+        displayFormats: { month: 'yy/M' },
         tooltipFormat: 'yyyy/M/d'
       },
       title: { display: true, text: '日付' }

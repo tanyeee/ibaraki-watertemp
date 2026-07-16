@@ -31,9 +31,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Update sea surface temperature (area137)
+      - name: Update sea surface temperature (area137 and area138)
         run: |
-          python scripts/update_sea.py
+          python scripts/update_sea.py --area 137
+          python scripts/update_sea.py --area 138
 
       - name: Update river/lake water temperature (enabled stations)
         run: |
