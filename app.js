@@ -57,6 +57,60 @@ var YearlyComparisonLogic = (function () {
   };
 })();
 
+// 表示期間の計算と境界フィルタはDOMに依存させず、Nodeでも検証可能にする。
+var DateRangeLogic = (function () {
+  'use strict';
+
+  function parseDate(dateStr) {
+    var parts = dateStr.split('-');
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  function addMonths(date, amount) {
+    var result = new Date(date.getTime());
+    var originalDay = result.getDate();
+    result.setDate(1);
+    result.setMonth(result.getMonth() + amount);
+    var lastDay = new Date(
+      result.getFullYear(),
+      result.getMonth() + 1,
+      0
+    ).getDate();
+    result.setDate(Math.min(originalDay, lastDay));
+    return result;
+  }
+
+  function filterByRange(records, start, end) {
+    if (!start) return records;
+    return records.filter(function (record) {
+      var date = parseDate(record.date);
+      return date >= start && date <= end;
+    });
+  }
+
+  function getRangeBounds(rangeKey, referenceDate) {
+    var end = referenceDate ? new Date(referenceDate.getTime()) : new Date();
+    end.setHours(0, 0, 0, 0);
+    var monthsByRange = {
+      '1m': 1,
+      '3m': 3,
+      '6m': 6,
+      '9m': 9,
+      '1y': 12,
+      '5y': 60
+    };
+    if (!monthsByRange[rangeKey]) return { start: null, end: null };
+    return { start: addMonths(end, -monthsByRange[rangeKey]), end: end };
+  }
+
+  return {
+    parseDate: parseDate,
+    addMonths: addMonths,
+    filterByRange: filterByRange,
+    getRangeBounds: getRangeBounds
+  };
+})();
+
 // 系列のグループ化と選択規則はDOMに依存させず、Nodeでも検証可能にする。
 var SeriesSelectionLogic = (function () {
   'use strict';
@@ -166,6 +220,7 @@ var SeriesSelectionLogic = (function () {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = YearlyComparisonLogic;
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
+  module.exports.DateRangeLogic = DateRangeLogic;
 }
 
 (function () {
@@ -209,11 +264,9 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // ---- ユーティリティ ----
 
-  // "YYYY-MM-DD" をタイムゾーンのずれなくローカル日付として Date に変換
-  function parseDate(dateStr) {
-    var parts = dateStr.split('-');
-    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  }
+  var parseDate = DateRangeLogic.parseDate;
+  var filterByRange = DateRangeLogic.filterByRange;
+  var getRangeBounds = DateRangeLogic.getRangeBounds;
 
   function formatDateJP(date) {
     var y = date.getFullYear();
@@ -226,12 +279,6 @@ if (typeof module !== 'undefined' && module.exports) {
   function formatMonthDayWithYear(dateStr) {
     var d = parseDate(dateStr);
     return (d.getMonth() + 1) + '月' + d.getDate() + '日 (' + d.getFullYear() + '年)';
-  }
-
-  function addMonths(date, n) {
-    var d = new Date(date.getTime());
-    d.setMonth(d.getMonth() + n);
-    return d;
   }
 
   // 系列一覧から色を割り当てる
@@ -314,36 +361,6 @@ if (typeof module !== 'undefined' && module.exports) {
         callbacks: tooltipCallbacks
       }
     };
-  }
-
-  // 期間フィルタ: records (date昇順を想定) から [start, end] の範囲のみ返す
-  // start が null の場合はフィルタなし(全期間)
-  function filterByRange(records, start, end) {
-    if (!start) {
-      return records;
-    }
-    return records.filter(function (r) {
-      var d = parseDate(r.date);
-      return d >= start && d <= end;
-    });
-  }
-
-  function getRangeBounds(rangeKey) {
-    var now = new Date();
-    now.setHours(0, 0, 0, 0);
-    switch (rangeKey) {
-      case '1m':
-        return { start: addMonths(now, -1), end: now };
-      case '3m':
-        return { start: addMonths(now, -3), end: now };
-      case '1y':
-        return { start: addMonths(now, -12), end: now };
-      case '5y':
-        return { start: addMonths(now, -60), end: now };
-      case 'all':
-      default:
-        return { start: null, end: null };
-    }
   }
 
   // ---- データ読み込み ----
@@ -446,7 +463,9 @@ if (typeof module !== 'undefined' && module.exports) {
           card.innerHTML =
             '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
             '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
-            '<span class="card-date">' + escapeHtml(last.date) + '</span>';
+            '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
+            '<span class="card-date card-date-short">' +
+              escapeHtml(shortDate(last.date)) + '</span>';
         } else {
           card.className = 'latest-card no-data';
           card.innerHTML =
@@ -464,6 +483,11 @@ if (typeof module !== 'undefined' && module.exports) {
     return String(str).replace(/[&<>"']/g, function (ch) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
     });
+  }
+
+  function shortDate(dateStr) {
+    var date = parseDate(dateStr);
+    return (date.getMonth() + 1) + '/' + date.getDate();
   }
 
   // ---- 時系列モード ----
@@ -573,7 +597,7 @@ if (typeof module !== 'undefined' && module.exports) {
       });
 
       updateSeriesGroupState(details);
-      details.open = !!list.querySelector('input[data-series-id]:checked');
+      details.open = false;
     });
 
   }
@@ -611,7 +635,6 @@ if (typeof module !== 'undefined' && module.exports) {
     });
     document.querySelectorAll('#series-checkboxes .series-group').forEach(function (details) {
       updateSeriesGroupState(details);
-      details.open = !!details.querySelector('input[data-series-id]:checked');
     });
     renderTimeseriesChart();
   }

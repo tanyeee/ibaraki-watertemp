@@ -113,6 +113,10 @@ a {
   margin-left: 4px;
 }
 
+.card-date-short {
+  display: none;
+}
+
 .latest-card.no-data {
   color: var(--color-muted);
   font-style: italic;
@@ -150,6 +154,8 @@ main {
 .tab-btn:focus-visible,
 .range-buttons button:focus-visible,
 .preset-buttons button:focus-visible,
+.series-picker > summary:focus-visible,
+.preset-picker > summary:focus-visible,
 #panel-yearly select:focus-visible,
 #panel-yearly button:focus-visible,
 .yearly-background-toggle input:focus-visible,
@@ -185,6 +191,77 @@ main {
 
 .timeseries-controls {
   align-items: stretch;
+}
+
+.series-picker {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.series-picker > summary,
+.preset-picker > summary {
+  position: relative;
+  min-height: 44px;
+  padding: 10px 36px 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.series-picker > summary::-webkit-details-marker,
+.preset-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.series-picker > summary::after,
+.preset-picker > summary::after {
+  content: "›";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  color: var(--color-muted);
+  font-size: 1.1rem;
+  transform: translateY(-50%);
+  transition: transform 140ms ease;
+}
+
+.series-picker[open] > summary::after,
+.preset-picker[open] > summary::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.series-picker > summary:hover,
+.preset-picker > summary:hover {
+  background: var(--color-control);
+}
+
+.series-picker-content {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.preset-picker {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.preset-picker > summary {
+  min-height: 40px;
+  padding-block: 8px;
+  font-size: 0.84rem;
+}
+
+.preset-picker .series-presets {
+  padding: 0 8px 8px;
+  border-top: 1px solid var(--color-border);
 }
 
 .series-presets,
@@ -550,6 +627,7 @@ main {
   height: 60vh;
   min-height: 320px;
   position: relative;
+  margin-bottom: 12px;
 }
 
 .status-text {
@@ -567,15 +645,61 @@ main {
 }
 
 @media (max-width: 600px) {
+  .app-header {
+    padding-inline: 12px;
+  }
   .app-header h1 {
     font-size: 1.05rem;
   }
+  .latest-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    overflow-x: visible;
+    padding: 2px 0 6px;
+    scroll-snap-type: none;
+  }
+  .latest-group,
+  .latest-group-cards {
+    display: contents;
+  }
+  .latest-group-title {
+    display: none;
+  }
   .latest-card {
-    min-width: 100px;
-    font-size: 0.72rem;
+    min-width: 0;
+    padding: 5px 5px 5px 7px;
+    border-left-width: 3px;
+    font-size: 0.68rem;
+  }
+  .latest-card .card-name {
+    display: -webkit-box;
+    min-height: 2.5em;
+    margin-bottom: 1px;
+    overflow: hidden;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .latest-card .card-value {
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
+  .latest-card .card-date {
+    margin-left: 2px;
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+  .card-date-full {
+    display: none;
+  }
+  .card-date-short {
+    display: inline;
   }
   .chart-wrap {
-    height: 50vh;
+    height: min(260px, 70vw);
+    min-height: 0;
     padding: 6px;
   }
   .controls {
@@ -608,6 +732,17 @@ main {
   }
   .range-buttons button {
     min-height: 40px;
+    min-width: 0;
+    padding-inline: 2px;
+    font-size: 0.75rem;
+  }
+  .range-buttons {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .range-buttons .control-label {
+    grid-column: 1 / -1;
   }
   .yearly-controls {
     gap: 12px;
@@ -636,7 +771,9 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .series-group-summary::before {
+  .series-group-summary::before,
+  .series-picker > summary::after,
+  .preset-picker > summary::after {
     transition: none;
   }
 }

@@ -52,6 +52,10 @@ USER_AGENT = "Mozilla/5.0 (compatible; IbarakiWaterTempBot/1.0; +https://github.
 MAX_WINDOW_SPAN_DAYS = 7
 DEFAULT_SLEEP_SEC = 2.0
 
+# 全8局の過去10年の正常な最低水温は3.0℃。1.5℃未満は対象水域では
+# 起こり得ず、波崎2局で配信された0.1℃/-0.1℃などのセンサー異常値とみなす。
+MIN_VALID_TEMP = 1.5
+
 
 def decode_bytes(content: bytes) -> str:
     for enc in ("cp932", "shift_jis", "utf-8", "euc_jp", "latin1"):
@@ -97,6 +101,8 @@ def parse_wqua_dat(text: str) -> dict[str, list[float]]:
         try:
             value = float(temp_raw)
         except ValueError:
+            continue
+        if value < MIN_VALID_TEMP:
             continue
         date_str = date_raw.replace("/", "-")
         daily.setdefault(date_str, []).append(value)
