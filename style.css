@@ -126,40 +126,35 @@ a {
 }
 
 .latest-cards {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
   padding: 2px 2px 10px;
-  scroll-snap-type: x proximity;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
-.latest-group {
-  flex: 0 0 auto;
-  scroll-snap-align: start;
-}
-
-.latest-group-title {
-  margin: 0 0 5px;
-  color: var(--color-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.latest-group-cards {
-  display: flex;
+/* 折りたたみ時(初期表示)に出す厳選カード(3列×2行)。PC・スマホ共通。 */
+.latest-cards-featured {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+/* 展開時に出す全カード。横スクロールはせず折り返し(wrap)で複数行に表示する。 */
+.latest-cards-groups {
+  display: none;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.latest-cards.cards-expanded .latest-cards-featured {
+  display: none;
+}
+
+.latest-cards.cards-expanded .latest-cards-groups {
+  display: grid;
 }
 
 .loading-text {
   margin: 0;
   color: var(--color-muted);
   font-size: 0.85rem;
-}
-
-.card-hidden-collapsed {
-  display: none;
 }
 
 .latest-cards-toggle {
@@ -765,19 +760,12 @@ main {
     height: 44px;
   }
   .latest-cards {
-    display: grid;
+    padding: 2px 0 6px;
+  }
+  .latest-cards-featured,
+  .latest-cards-groups {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
-    overflow-x: visible;
-    padding: 2px 0 6px;
-    scroll-snap-type: none;
-  }
-  .latest-group,
-  .latest-group-cards {
-    display: contents;
-  }
-  .latest-group-title {
-    display: none;
   }
   .latest-card {
     min-width: 0;

@@ -420,7 +420,15 @@ if (typeof module !== 'undefined' && module.exports) {
   var isDarkMode = darkModeMedia.matches;
   var latestCardResizeFrame = null;
   var CARDS_EXPANDED_STORAGE_KEY = 'watertemp_cards_expanded';
-  var CARDS_COLLAPSED_VISIBLE_COUNT = 3;
+  // 折りたたみ時に表示する最新値カード(3枚×2行、この順で表示)
+  var FEATURED_CARD_IDS = [
+    'sea_area137',
+    'sea_area138',
+    'tapwater',
+    'kasumigaura_koshin',
+    'kitaura_jinguubashi',
+    'tonegawa_down_upper'
+  ];
   var cardsExpanded = false;
 
   // ---- ユーティリティ ----
@@ -607,78 +615,87 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
+  // 折りたたみ時に表示する厳選カード(表示可能なもののみ、指定順)。
+  function featuredStations() {
+    var visibleById = {};
+    primaryVisibleStations().forEach(function (station) {
+      visibleById[station.id] = station;
+    });
+    return FEATURED_CARD_IDS.map(function (id) {
+      return visibleById[id];
+    }).filter(Boolean);
+  }
+
+  function buildLatestCardElement(station) {
+    var entry = seriesData[station.id];
+    var card = document.createElement('div');
+    var cardTextColor = entry && entry.color
+      ? CardTextColorLogic.readableSeriesColor(entry.color, isDarkMode)
+      : '';
+
+    if (entry && entry.loaded) {
+      var last = entry.records[entry.records.length - 1];
+      card.className = 'latest-card';
+      card.style.borderLeftColor = entry.color;
+      card.innerHTML =
+        '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
+        '<span class="card-reading">' +
+          '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
+          '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
+          '<span class="card-date card-date-short">' +
+            escapeHtml(shortDate(last.date)) + '</span>' +
+        '</span>';
+    } else {
+      card.className = 'latest-card no-data';
+      card.innerHTML =
+        '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
+        '<span>データ未取得</span>';
+    }
+    card.querySelector('.card-name').style.color = cardTextColor;
+    var cardValue = card.querySelector('.card-value');
+    if (cardValue) cardValue.style.color = cardTextColor;
+    return card;
+  }
+
   function renderLatestCards() {
     var container = document.getElementById('latest-cards');
     container.innerHTML = '';
 
-    SeriesSelectionLogic.groupSeries(primaryVisibleStations()).forEach(function (group) {
-      var section = document.createElement('section');
-      section.className = 'latest-group';
-      section.setAttribute('aria-label', group.name);
-
-      var heading = document.createElement('h2');
-      heading.className = 'latest-group-title';
-      heading.textContent = group.name;
-      section.appendChild(heading);
-
-      var cards = document.createElement('div');
-      cards.className = 'latest-group-cards';
-      group.series.forEach(function (station) {
-        var entry = seriesData[station.id];
-        var card = document.createElement('div');
-        var cardTextColor = entry && entry.color
-          ? CardTextColorLogic.readableSeriesColor(entry.color, isDarkMode)
-          : '';
-
-        if (entry && entry.loaded) {
-          var last = entry.records[entry.records.length - 1];
-          card.className = 'latest-card';
-          card.style.borderLeftColor = entry.color;
-          card.innerHTML =
-            '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
-            '<span class="card-reading">' +
-              '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
-              '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
-              '<span class="card-date card-date-short">' +
-                escapeHtml(shortDate(last.date)) + '</span>' +
-            '</span>';
-        } else {
-          card.className = 'latest-card no-data';
-          card.innerHTML =
-            '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
-            '<span>データ未取得</span>';
-        }
-        card.querySelector('.card-name').style.color = cardTextColor;
-        var cardValue = card.querySelector('.card-value');
-        if (cardValue) cardValue.style.color = cardTextColor;
-        cards.appendChild(card);
-      });
-      section.appendChild(cards);
-      container.appendChild(section);
+    var featuredWrap = document.createElement('div');
+    featuredWrap.className = 'latest-cards-featured';
+    featuredStations().forEach(function (station) {
+      featuredWrap.appendChild(buildLatestCardElement(station));
     });
+
+    var groupsWrap = document.createElement('div');
+    groupsWrap.className = 'latest-cards-groups';
+    SeriesSelectionLogic.groupSeries(primaryVisibleStations()).forEach(function (group) {
+      group.series.forEach(function (station) {
+        groupsWrap.appendChild(buildLatestCardElement(station));
+      });
+    });
+
+    container.appendChild(featuredWrap);
+    container.appendChild(groupsWrap);
 
     scheduleLatestCardNameSizing();
     updateCardsCollapse();
   }
 
-  // 狭い画面では最新値カードを最初の1行(3枚)のみ表示し、
-  // トグルボタンで全カードの展開/折りたたみを切り替える。
+  // 初期状態では厳選カードのみ表示し、トグルボタンで全カードの展開/折りたたみを切り替える。
+  // スマホ・PC共通の挙動(画面幅に依存しない)。
   function updateCardsCollapse() {
     var container = document.getElementById('latest-cards');
     var toggle = document.getElementById('latest-cards-toggle');
     if (!container || !toggle) return;
 
-    var cards = Array.prototype.slice.call(container.querySelectorAll('.latest-card'));
-    var hasOverflow = narrowScreenMedia.matches && cards.length > CARDS_COLLAPSED_VISIBLE_COUNT;
+    var hasOverflow = primaryVisibleStations().length > featuredStations().length;
 
     toggle.hidden = !hasOverflow;
     toggle.setAttribute('aria-expanded', String(cardsExpanded));
     toggle.textContent = cardsExpanded ? '閉じる ▴' : 'すべて表示 ▾';
 
-    cards.forEach(function (card, index) {
-      var shouldHide = hasOverflow && !cardsExpanded && index >= CARDS_COLLAPSED_VISIBLE_COUNT;
-      card.classList.toggle('card-hidden-collapsed', shouldHide);
-    });
+    container.classList.toggle('cards-expanded', hasOverflow && cardsExpanded);
   }
 
   function initCardsToggle() {
@@ -689,7 +706,6 @@ if (typeof module !== 'undefined' && module.exports) {
       saveCardsExpandedPref(cardsExpanded);
       updateCardsCollapse();
     });
-    narrowScreenMedia.addEventListener('change', updateCardsCollapse);
   }
 
   function resizeLatestCardNames() {
@@ -946,7 +962,7 @@ if (typeof module !== 'undefined' && module.exports) {
       label: station.name,
       data: points,
       showLine: false,
-      pointRadius: narrowScreenMedia.matches ? 1.4 : 2,
+      pointRadius: narrowScreenMedia.matches ? 0.5 : 2,
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
@@ -1218,7 +1234,7 @@ if (typeof module !== 'undefined' && module.exports) {
         label: 'その他の年',
         data: backgroundPoints,
         showLine: false,
-        pointRadius: narrowScreenMedia.matches ? 1.4 : 2,
+        pointRadius: narrowScreenMedia.matches ? 0.5 : 2,
         pointHoverRadius: 3,
         backgroundColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT,
         borderColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT
@@ -1234,7 +1250,7 @@ if (typeof module !== 'undefined' && module.exports) {
         label: year + '年',
         data: points,
         showLine: false,
-        pointRadius: narrowScreenMedia.matches ? 1.4 : 3,
+        pointRadius: narrowScreenMedia.matches ? 0.5 : 3,
         pointHoverRadius: 5,
         backgroundColor: color,
         borderColor: color
