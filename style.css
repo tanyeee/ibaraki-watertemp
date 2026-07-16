@@ -153,6 +153,7 @@ main {
 #panel-yearly select:focus-visible,
 #panel-yearly button:focus-visible,
 .yearly-background-toggle input:focus-visible,
+.dormant-series-toggle input:focus-visible,
 .series-group-summary:focus-visible,
 .series-group-toggle input:focus-visible,
 .series-checkbox input:focus-visible {
@@ -189,6 +190,22 @@ main {
 .series-presets,
 .series-groups {
   flex: 1 1 100%;
+}
+
+.dormant-series-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 7px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dormant-series-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-accent);
 }
 
 .series-presets {
@@ -291,7 +308,8 @@ main {
 }
 
 .series-count-badge,
-.series-unavailable-badge {
+.series-unavailable-badge,
+.series-dormant-badge {
   border-radius: 999px;
   background: var(--color-control);
   color: var(--color-muted);
@@ -380,6 +398,16 @@ main {
   margin-left: auto;
   padding: 2px 6px;
   border: 1px solid var(--color-border);
+}
+
+.series-dormant-badge {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+}
+
+.series-unavailable-badge + .series-dormant-badge {
+  margin-left: 0;
 }
 
 .series-checkbox .swatch {

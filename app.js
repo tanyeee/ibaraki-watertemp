@@ -105,6 +105,27 @@ var SeriesSelectionLogic = (function () {
     }).map(function (station) { return station.id; });
   }
 
+  function isDormantDatasetEnd(datasetEnd, today) {
+    var dateMatch = String(datasetEnd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dateMatch) return false;
+
+    var endTime = Date.UTC(
+      Number(dateMatch[1]),
+      Number(dateMatch[2]) - 1,
+      Number(dateMatch[3])
+    );
+    var endDate = new Date(endTime);
+    if (
+      endDate.getUTCFullYear() !== Number(dateMatch[1]) ||
+      endDate.getUTCMonth() !== Number(dateMatch[2]) - 1 ||
+      endDate.getUTCDate() !== Number(dateMatch[3])
+    ) return false;
+
+    var base = today instanceof Date ? today : new Date();
+    var todayTime = Date.UTC(base.getFullYear(), base.getMonth(), base.getDate());
+    return todayTime - endTime >= 30 * 24 * 60 * 60 * 1000;
+  }
+
   function groupSelectionState(series, selectedIds, availableIds) {
     var selected = {};
     var available = {};
@@ -137,6 +158,7 @@ var SeriesSelectionLogic = (function () {
     groupSeries: groupSeries,
     initialSelectedIds: initialSelectedIds,
     presetSelectedIds: presetSelectedIds,
+    isDormantDatasetEnd: isDormantDatasetEnd,
     groupSelectionState: groupSelectionState
   };
 })();
@@ -176,6 +198,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var seriesData = {};             // id -> { config, meta, records, color, loaded, error }
   var currentMode = 'timeseries';
   var currentRange = '1y';
+  var showDormantStations = false;
   var tsChart = null;
   var yearlyChart = null;
   var yearlyChartRendered = false;
@@ -356,6 +379,9 @@ if (typeof module !== 'undefined' && module.exports) {
           meta: json.meta || {},
           records: records,
           loaded: records.length > 0,
+          dormant: SeriesSelectionLogic.isDormantDatasetEnd(
+            json.meta && json.meta.dataset_end
+          ),
           error: false
         };
       })
@@ -366,6 +392,7 @@ if (typeof module !== 'undefined' && module.exports) {
           meta: {},
           records: [],
           loaded: false,
+          dormant: false,
           error: true
         };
       });
@@ -385,11 +412,18 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // ---- ヘッダ: 最新値カード ----
 
+  function primaryVisibleStations() {
+    return stationsConfig.filter(function (station) {
+      var entry = seriesData[station.id];
+      return showDormantStations || !(entry && entry.dormant);
+    });
+  }
+
   function renderLatestCards() {
     var container = document.getElementById('latest-cards');
     container.innerHTML = '';
 
-    SeriesSelectionLogic.groupSeries(stationsConfig).forEach(function (group) {
+    SeriesSelectionLogic.groupSeries(primaryVisibleStations()).forEach(function (group) {
       var section = document.createElement('section');
       section.className = 'latest-group';
       section.setAttribute('aria-label', group.name);
@@ -440,12 +474,13 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
-  function buildSeriesCheckboxes() {
+  function buildSeriesCheckboxes(selectedIds) {
     var container = document.getElementById('series-checkboxes');
     container.innerHTML = '';
-    var initialIds = SeriesSelectionLogic.initialSelectedIds(stationsConfig);
+    var visibleStations = primaryVisibleStations();
+    var initialIds = selectedIds || SeriesSelectionLogic.initialSelectedIds(visibleStations);
 
-    SeriesSelectionLogic.groupSeries(stationsConfig).forEach(function (group) {
+    SeriesSelectionLogic.groupSeries(visibleStations).forEach(function (group) {
       var details = document.createElement('details');
       details.className = 'series-group';
       details.dataset.group = group.name;
@@ -509,6 +544,12 @@ if (typeof module !== 'undefined' && module.exports) {
           status.textContent = '未取得';
           label.appendChild(status);
         }
+        if (entry && entry.dormant) {
+          var dormantStatus = document.createElement('span');
+          dormantStatus.className = 'series-dormant-badge';
+          dormantStatus.textContent = '休止中(最終: ' + entry.meta.dataset_end + ')';
+          label.appendChild(dormantStatus);
+        }
         list.appendChild(label);
       });
       details.appendChild(list);
@@ -535,11 +576,6 @@ if (typeof module !== 'undefined' && module.exports) {
       details.open = !!list.querySelector('input[data-series-id]:checked');
     });
 
-    document.getElementById('series-presets').addEventListener('click', function (event) {
-      var button = event.target.closest('button[data-preset]');
-      if (!button) return;
-      applySeriesPreset(button.dataset.preset);
-    });
   }
 
   function updateSeriesGroupState(details) {
@@ -552,7 +588,7 @@ if (typeof module !== 'undefined' && module.exports) {
     var availableIds = checkboxes.filter(function (checkbox) {
       return !checkbox.disabled;
     }).map(function (checkbox) { return checkbox.dataset.seriesId; });
-    var group = SeriesSelectionLogic.groupSeries(stationsConfig).filter(function (candidate) {
+    var group = SeriesSelectionLogic.groupSeries(primaryVisibleStations()).filter(function (candidate) {
       return candidate.name === details.dataset.group;
     })[0];
     var state = SeriesSelectionLogic.groupSelectionState(
@@ -589,6 +625,27 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     });
     return ids;
+  }
+
+  function initSeriesControls() {
+    document.getElementById('series-presets').addEventListener('click', function (event) {
+      var button = event.target.closest('button[data-preset]');
+      if (!button) return;
+      applySeriesPreset(button.dataset.preset);
+    });
+
+    document.getElementById('show-dormant-series').addEventListener('change', function (event) {
+      var selectedIds = checkedSeriesIds();
+      showDormantStations = event.target.checked;
+      if (!showDormantStations) {
+        selectedIds = selectedIds.filter(function (id) {
+          return !(seriesData[id] && seriesData[id].dormant);
+        });
+      }
+      renderLatestCards();
+      buildSeriesCheckboxes(selectedIds);
+      renderTimeseriesChart();
+    });
   }
 
   function buildTimeseriesDataset(station, bounds) {
@@ -1042,6 +1099,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
         renderLatestCards();
         buildSeriesCheckboxes();
+        initSeriesControls();
         buildYearlySelect();
         initRangeButtons();
         initTabs();

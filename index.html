@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f9ead6">
 <title>茨城 水温比較</title>
+<link rel="icon" href="icons/favicon-48.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,6 +36,10 @@
           <button type="button" data-preset="none">全て解除</button>
         </div>
       </div>
+      <label class="dormant-series-toggle">
+        <input type="checkbox" id="show-dormant-series">
+        <span>休止中の地点も表示</span>
+      </label>
       <div class="series-groups" id="series-checkboxes">
         <!-- groupごとの系列チェックボックスはJSで生成 -->
       </div>
