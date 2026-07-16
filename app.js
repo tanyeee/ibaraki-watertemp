@@ -263,11 +263,87 @@ var ColorAssignmentLogic = (function () {
   };
 })();
 
+// 最新値カードの文字色を系列色から作り、背景とのコントラストを保証する。
+// DOMに依存させず、Nodeでも全系列を検証可能にする。
+var CardTextColorLogic = (function () {
+  'use strict';
+
+  var BACKGROUNDS = {
+    light: '#FFFFFF',
+    dark: '#1A1F26'
+  };
+  var MIN_CONTRAST = 4.5;
+
+  function hexToRgb(hex) {
+    var value = String(hex).replace('#', '');
+    return {
+      r: parseInt(value.slice(0, 2), 16),
+      g: parseInt(value.slice(2, 4), 16),
+      b: parseInt(value.slice(4, 6), 16)
+    };
+  }
+
+  function rgbToHex(rgb) {
+    return '#' + ['r', 'g', 'b'].map(function (key) {
+      return Math.round(rgb[key]).toString(16).padStart(2, '0');
+    }).join('').toUpperCase();
+  }
+
+  function mix(hex, targetHex, amount) {
+    var color = hexToRgb(hex);
+    var target = hexToRgb(targetHex);
+    return rgbToHex({
+      r: color.r + (target.r - color.r) * amount,
+      g: color.g + (target.g - color.g) * amount,
+      b: color.b + (target.b - color.b) * amount
+    });
+  }
+
+  function relativeLuminance(hex) {
+    var rgb = hexToRgb(hex);
+    var channels = ['r', 'g', 'b'].map(function (key) {
+      var channel = rgb[key] / 255;
+      return channel <= 0.04045
+        ? channel / 12.92
+        : Math.pow((channel + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  }
+
+  function contrastRatio(first, second) {
+    var firstLuminance = relativeLuminance(first);
+    var secondLuminance = relativeLuminance(second);
+    var lighter = Math.max(firstLuminance, secondLuminance);
+    var darker = Math.min(firstLuminance, secondLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function readableSeriesColor(seriesColor, darkMode) {
+    var background = darkMode ? BACKGROUNDS.dark : BACKGROUNDS.light;
+    var target = darkMode ? '#FFFFFF' : '#000000';
+    var amount = darkMode ? 0.65 : 0.55;
+    var color = mix(seriesColor, target, amount);
+
+    while (contrastRatio(color, background) < MIN_CONTRAST && amount < 1) {
+      amount = Math.min(1, amount + 0.05);
+      color = mix(seriesColor, target, amount);
+    }
+    return color;
+  }
+
+  return {
+    BACKGROUNDS: BACKGROUNDS,
+    contrastRatio: contrastRatio,
+    readableSeriesColor: readableSeriesColor
+  };
+})();
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = YearlyComparisonLogic;
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
   module.exports.DateRangeLogic = DateRangeLogic;
   module.exports.ColorAssignmentLogic = ColorAssignmentLogic;
+  module.exports.CardTextColorLogic = CardTextColorLogic;
 }
 
 (function () {
@@ -301,6 +377,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
+  var latestCardResizeFrame = null;
 
   // ---- ユーティリティ ----
 
@@ -469,6 +546,9 @@ if (typeof module !== 'undefined' && module.exports) {
       group.series.forEach(function (station) {
         var entry = seriesData[station.id];
         var card = document.createElement('div');
+        var cardTextColor = entry && entry.color
+          ? CardTextColorLogic.readableSeriesColor(entry.color, isDarkMode)
+          : '';
 
         if (entry && entry.loaded) {
           var last = entry.records[entry.records.length - 1];
@@ -488,10 +568,52 @@ if (typeof module !== 'undefined' && module.exports) {
             '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
             '<span>データ未取得</span>';
         }
+        card.querySelector('.card-name').style.color = cardTextColor;
+        var cardValue = card.querySelector('.card-value');
+        if (cardValue) cardValue.style.color = cardTextColor;
         cards.appendChild(card);
       });
       section.appendChild(cards);
       container.appendChild(section);
+    });
+
+    scheduleLatestCardNameSizing();
+  }
+
+  function resizeLatestCardNames() {
+    var names = Array.prototype.slice.call(
+      document.querySelectorAll('#latest-cards .card-name')
+    );
+    if (!names.length) return;
+
+    names.forEach(function (name) { name.style.fontSize = '10px'; });
+
+    var sampleStyle = window.getComputedStyle(names[0]);
+    var canvas = document.createElement('canvas');
+    var context = canvas.getContext('2d');
+    context.font = sampleStyle.fontStyle + ' ' + sampleStyle.fontWeight +
+      ' 1px ' + sampleStyle.fontFamily;
+
+    var commonSize = names.reduce(function (smallest, name) {
+      var measuredAtOnePixel = context.measureText(name.textContent).width;
+      var availableWidth = name.clientWidth - 1;
+      if (!measuredAtOnePixel || availableWidth <= 0) return smallest;
+      return Math.min(smallest, availableWidth / measuredAtOnePixel);
+    }, 16);
+
+    commonSize = Math.max(10, Math.min(16, commonSize));
+    names.forEach(function (name) {
+      name.style.fontSize = commonSize.toFixed(2) + 'px';
+    });
+  }
+
+  function scheduleLatestCardNameSizing() {
+    if (latestCardResizeFrame !== null) {
+      window.cancelAnimationFrame(latestCardResizeFrame);
+    }
+    latestCardResizeFrame = window.requestAnimationFrame(function () {
+      latestCardResizeFrame = null;
+      resizeLatestCardNames();
     });
   }
 
@@ -1126,6 +1248,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function init() {
     initReloadButton();
+    window.addEventListener('resize', scheduleLatestCardNameSizing);
     updateStatus('データ読み込み中...');
     loadAllData()
       .then(function () {

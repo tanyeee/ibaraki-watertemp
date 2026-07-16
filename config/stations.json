@@ -18,7 +18,7 @@
     },
     {
       "id": "tapwater",
-      "name": "水道水温(久慈川水系)",
+      "name": "水道水温(久慈川)",
       "kind": "tapwater",
       "group": "水道水",
       "path": "data/tapwater/suidousui.json",
