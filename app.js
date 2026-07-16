@@ -116,6 +116,7 @@ var SeriesSelectionLogic = (function () {
   'use strict';
 
   var GROUP_ORDER = ['海', '水道水', '霞ヶ浦', '北浦', '利根川'];
+  var SELECTED_SERIES_STORAGE_KEY = 'watertemp_selected_series';
   var REPRESENTATIVE_IDS = [
     'sea_area137',
     'tapwater',
@@ -147,6 +148,42 @@ var SeriesSelectionLogic = (function () {
     var configured = {};
     (series || []).forEach(function (station) { configured[station.id] = true; });
     return REPRESENTATIVE_IDS.filter(function (id) { return configured[id]; });
+  }
+
+  // localStorageに保存された選択IDのうち、現在表示可能な系列のみを残す。
+  // savedIds が配列でない(未保存/破損)場合は null を返し、呼び出し側で
+  // 代表4地点などの既定値にフォールバックできるようにする。
+  // savedIds が空配列([])の場合はそのまま空配列を返す(「全て解除」の復元)。
+  function restoreSelectedIds(savedIds, visibleStations) {
+    if (!Array.isArray(savedIds)) return null;
+    var visible = {};
+    (visibleStations || []).forEach(function (station) { visible[station.id] = true; });
+    return savedIds.filter(function (id) {
+      return typeof id === 'string' && visible[id];
+    });
+  }
+
+  // storage は localStorage 互換オブジェクト(getItem/setItemを持つ)を想定。
+  // 未対応環境やアクセス不可(プライベートモード等)では null を返す。
+  function loadSelectedSeriesIds(storage) {
+    if (!storage || typeof storage.getItem !== 'function') return null;
+    try {
+      var raw = storage.getItem(SELECTED_SERIES_STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveSelectedSeriesIds(storage, ids) {
+    if (!storage || typeof storage.setItem !== 'function') return;
+    try {
+      storage.setItem(SELECTED_SERIES_STORAGE_KEY, JSON.stringify(ids || []));
+    } catch (err) {
+      // 保存領域が使えない環境では黙って無視する
+    }
   }
 
   function presetSelectedIds(preset, series) {
@@ -209,9 +246,13 @@ var SeriesSelectionLogic = (function () {
   return {
     GROUP_ORDER: GROUP_ORDER.slice(),
     REPRESENTATIVE_IDS: REPRESENTATIVE_IDS.slice(),
+    SELECTED_SERIES_STORAGE_KEY: SELECTED_SERIES_STORAGE_KEY,
     groupSeries: groupSeries,
     initialSelectedIds: initialSelectedIds,
     presetSelectedIds: presetSelectedIds,
+    restoreSelectedIds: restoreSelectedIds,
+    loadSelectedSeriesIds: loadSelectedSeriesIds,
+    saveSelectedSeriesIds: saveSelectedSeriesIds,
     isDormantDatasetEnd: isDormantDatasetEnd,
     groupSelectionState: groupSelectionState
   };
@@ -384,6 +425,16 @@ if (typeof module !== 'undefined' && module.exports) {
   var parseDate = DateRangeLogic.parseDate;
   var filterByRange = DateRangeLogic.filterByRange;
   var getRangeBounds = DateRangeLogic.getRangeBounds;
+
+  // プライベートブラウジング等でlocalStorageへのアクセス自体が例外を
+  // 投げる環境があるため、安全に取得できるようラップする。
+  function getLocalStorage() {
+    try {
+      return window.localStorage;
+    } catch (err) {
+      return null;
+    }
+  }
 
   function formatDateJP(date) {
     var y = date.getFullYear();
@@ -726,12 +777,14 @@ if (typeof module !== 'undefined' && module.exports) {
         });
         updateSeriesGroupState(details);
         renderTimeseriesChart();
+        persistSelectedSeries();
       });
 
       list.addEventListener('change', function (event) {
         if (!event.target.matches('input[data-series-id]')) return;
         updateSeriesGroupState(details);
         renderTimeseriesChart();
+        persistSelectedSeries();
       });
 
       updateSeriesGroupState(details);
@@ -775,6 +828,7 @@ if (typeof module !== 'undefined' && module.exports) {
       updateSeriesGroupState(details);
     });
     renderTimeseriesChart();
+    persistSelectedSeries();
   }
 
   function checkedSeriesIds() {
@@ -786,6 +840,12 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     });
     return ids;
+  }
+
+  // 場所比較モードの選択地点をlocalStorageへ保存する。
+  // 再読み込み後も選択状態を維持するための処理(プリセット適用時も含む)。
+  function persistSelectedSeries() {
+    SeriesSelectionLogic.saveSelectedSeriesIds(getLocalStorage(), checkedSeriesIds());
   }
 
   function initSeriesControls() {
@@ -806,6 +866,7 @@ if (typeof module !== 'undefined' && module.exports) {
       renderLatestCards();
       buildSeriesCheckboxes(selectedIds);
       renderTimeseriesChart();
+      persistSelectedSeries();
     });
   }
 
@@ -1269,7 +1330,11 @@ if (typeof module !== 'undefined' && module.exports) {
         );
 
         renderLatestCards();
-        buildSeriesCheckboxes();
+        var restoredSelectedIds = SeriesSelectionLogic.restoreSelectedIds(
+          SeriesSelectionLogic.loadSelectedSeriesIds(getLocalStorage()),
+          primaryVisibleStations()
+        );
+        buildSeriesCheckboxes(restoredSelectedIds);
         initSeriesControls();
         buildYearlySelect();
         initRangeButtons();
