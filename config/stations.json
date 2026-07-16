@@ -83,7 +83,7 @@
       "station_id": "403031283303141",
       "name": "利根川 河口堰上流",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": true,
       "path": "data/river/403031283303141.json"
     },
@@ -92,7 +92,7 @@
       "station_id": "403031283303142",
       "name": "上流・中層(利根川河口堰)",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": false,
       "path": "data/river/403031283303142.json",
       "hidden": true
@@ -102,7 +102,7 @@
       "station_id": "403031283303143",
       "name": "上流・下層(利根川河口堰)",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": false,
       "path": "data/river/403031283303143.json",
       "hidden": true
@@ -112,7 +112,7 @@
       "station_id": "403031283303144",
       "name": "利根川 河口堰下流",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": true,
       "path": "data/river/403031283303144.json"
     },
@@ -121,7 +121,7 @@
       "station_id": "403031283303145",
       "name": "下流・中層(利根川河口堰)",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": false,
       "path": "data/river/403031283303145.json",
       "hidden": true
@@ -131,7 +131,7 @@
       "station_id": "403031283303146",
       "name": "下流・下層(利根川河口堰)",
       "kind": "river",
-      "group": "利根川河口堰",
+      "group": "利根川",
       "enabled": false,
       "path": "data/river/403031283303146.json",
       "hidden": true

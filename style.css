@@ -48,9 +48,46 @@ a {
   padding: 12px 16px;
 }
 
+.app-header-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .app-header h1 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 1.25rem;
+}
+
+.reload-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-control);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reload-button:hover {
+  background: var(--color-bg);
+}
+
+.reload-button:active {
+  transform: scale(0.94);
+}
+
+.reload-button:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .latest-cards {
@@ -660,6 +697,10 @@ main {
   }
   .app-header h1 {
     font-size: 1.05rem;
+  }
+  .reload-button {
+    width: 44px;
+    height: 44px;
   }
   .latest-cards {
     display: grid;

@@ -12,7 +12,10 @@
 </head>
 <body>
 <header class="app-header">
-  <h1>茨城県 海・湖・河川水温比較</h1>
+  <div class="app-header-title-row">
+    <h1>茨城県 海・湖・河川水温比較</h1>
+    <button type="button" id="reload-button" class="reload-button" aria-label="最新データに更新" title="最新データに更新">↻</button>
+  </div>
   <p><a href="input.html">水温を記録する</a></p>
   <div id="latest-cards" class="latest-cards" aria-live="polite">
     <p class="loading-text">データ読み込み中...</p>
@@ -38,7 +41,7 @@
             <div class="series-presets" aria-label="系列プリセット">
               <div class="preset-buttons" id="series-presets">
                 <button type="button" data-preset="representative">代表地点</button>
-                <button type="button" data-preset="tonegawa">利根川6局</button>
+                <button type="button" data-preset="tonegawa">利根川</button>
                 <button type="button" data-preset="lakes">湖沼</button>
                 <button type="button" data-preset="none">全て解除</button>
               </div>

@@ -115,7 +115,7 @@ var DateRangeLogic = (function () {
 var SeriesSelectionLogic = (function () {
   'use strict';
 
-  var GROUP_ORDER = ['海', '水道水', '霞ヶ浦', '北浦', '利根川河口堰'];
+  var GROUP_ORDER = ['海', '水道水', '霞ヶ浦', '北浦', '利根川'];
   var REPRESENTATIVE_IDS = [
     'sea_area137',
     'tapwater',
@@ -153,7 +153,7 @@ var SeriesSelectionLogic = (function () {
     if (preset === 'representative') return initialSelectedIds(series);
     if (preset === 'none') return [];
     return (series || []).filter(function (station) {
-      if (preset === 'tonegawa') return station.group === '利根川河口堰';
+      if (preset === 'tonegawa') return station.group === '利根川';
       if (preset === 'lakes') return station.group === '霞ヶ浦' || station.group === '北浦';
       return false;
     }).map(function (station) { return station.id; });
@@ -228,7 +228,7 @@ var ColorAssignmentLogic = (function () {
       '水道水': ['#E69F00'],
       '霞ヶ浦': ['#009E73', '#4CAF50', '#8BC34A'],
       '北浦': ['#9467BD', '#CC79A7', '#E377C2'],
-      '利根川河口堰': ['#D55E00', '#FF9E4A'],
+      '利根川': ['#D55E00', '#FF9E4A'],
       'その他': ['#0072B2', '#E69F00', '#009E73', '#CC79A7']
     },
     dark: {
@@ -236,7 +236,7 @@ var ColorAssignmentLogic = (function () {
       '水道水': ['#E6C229'],
       '霞ヶ浦': ['#4DD0A8', '#81C784', '#AED581'],
       '北浦': ['#B39DDB', '#E88AC5', '#F48FB1'],
-      '利根川河口堰': ['#FF8A65', '#E25822'],
+      '利根川': ['#FF8A65', '#E25822'],
       'その他': ['#56B4E9', '#FFB74D', '#4DD0A8', '#E88AC5']
     }
   };
@@ -1085,6 +1085,14 @@ if (typeof module !== 'undefined' && module.exports) {
     document.getElementById('global-status').textContent = text;
   }
 
+  function initReloadButton() {
+    document.getElementById('reload-button').addEventListener('click', function () {
+      var url = new URL(window.location.href);
+      url.searchParams.set('v', Date.now());
+      window.location.href = url.toString();
+    });
+  }
+
   function updateThemeColors(event) {
     isDarkMode = event.matches;
     var colorById = assignColors(stationsConfig);
@@ -1117,6 +1125,7 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 
   function init() {
+    initReloadButton();
     updateStatus('データ読み込み中...');
     loadAllData()
       .then(function () {
