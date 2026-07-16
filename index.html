@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f9ead6">
 <title>茨城県 海・湖・河川水温比較</title>
 <link rel="icon" href="icons/favicon-48.png" type="image/png">
@@ -12,19 +12,22 @@
 </head>
 <body>
 <header class="app-header">
-  <div class="app-header-title-row">
-    <h1>茨城県 海・湖・河川水温比較</h1>
-    <div class="header-actions">
-      <a href="input.html" class="header-icon-button" aria-label="水温を記録する" title="水温を記録する">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 2.5S5.5 10 5.5 15a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z"/>
-        </svg>
-      </a>
-      <button type="button" id="reload-button" class="header-icon-button reload-button" aria-label="最新データに更新" title="最新データに更新">↻</button>
+  <div class="app-header-inner">
+    <div class="app-header-title-row">
+      <h1>茨城県 海・湖・河川水温比較</h1>
+      <div class="header-actions">
+        <a href="input.html" class="header-icon-button" aria-label="水温を記録する" title="水温を記録する">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 2.5S5.5 10 5.5 15a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z"/>
+          </svg>
+        </a>
+        <button type="button" id="reload-button" class="header-icon-button reload-button" aria-label="最新データに更新" title="最新データに更新">↻</button>
+      </div>
     </div>
-  </div>
-  <div id="latest-cards" class="latest-cards" aria-live="polite">
-    <p class="loading-text">データ読み込み中...</p>
+    <div id="latest-cards" class="latest-cards" aria-live="polite">
+      <p class="loading-text">データ読み込み中...</p>
+    </div>
+    <button type="button" id="latest-cards-toggle" class="latest-cards-toggle" aria-expanded="false" hidden>すべて表示 ▾</button>
   </div>
 </header>
 

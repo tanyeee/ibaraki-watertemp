@@ -42,9 +42,24 @@ a {
   color: var(--color-accent);
 }
 
+/* マウスクリック等でフォーカスした際は既定の四角い枠を出さず、
+   キーボード操作(:focus-visible)の場合のみ枠を表示する。 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.app-header-inner {
+  max-width: 1140px;
+  margin: 0 auto;
   padding: 12px 16px;
 }
 
@@ -143,6 +158,31 @@ a {
   font-size: 0.85rem;
 }
 
+.card-hidden-collapsed {
+  display: none;
+}
+
+.latest-cards-toggle {
+  display: none;
+}
+
+.latest-cards-toggle:not([hidden]) {
+  display: block;
+  margin: 2px auto 0;
+  padding: 3px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.latest-cards-toggle:hover {
+  text-decoration: underline;
+}
+
 .latest-card {
   background: var(--color-control);
   border: 1px solid var(--color-border);
@@ -192,7 +232,7 @@ a {
 }
 
 main {
-  max-width: 1100px;
+  max-width: 1140px;
   margin: 0 auto;
   padding: 12px 16px 32px;
 }
@@ -714,7 +754,7 @@ main {
 }
 
 @media (max-width: 600px) {
-  .app-header {
+  .app-header-inner {
     padding-inline: 12px;
   }
   .app-header h1 {

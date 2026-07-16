@@ -419,6 +419,9 @@ if (typeof module !== 'undefined' && module.exports) {
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
   var latestCardResizeFrame = null;
+  var CARDS_EXPANDED_STORAGE_KEY = 'watertemp_cards_expanded';
+  var CARDS_COLLAPSED_VISIBLE_COUNT = 3;
+  var cardsExpanded = false;
 
   // ---- ユーティリティ ----
 
@@ -433,6 +436,27 @@ if (typeof module !== 'undefined' && module.exports) {
       return window.localStorage;
     } catch (err) {
       return null;
+    }
+  }
+
+  // 最新値カードの展開状態(狭い画面向け)をlocalStorageから復元する。
+  function loadCardsExpandedPref() {
+    var storage = getLocalStorage();
+    if (!storage) return false;
+    try {
+      return storage.getItem(CARDS_EXPANDED_STORAGE_KEY) === '1';
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function saveCardsExpandedPref(expanded) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(CARDS_EXPANDED_STORAGE_KEY, expanded ? '1' : '0');
+    } catch (err) {
+      // 保存領域が使えない環境では黙って無視する
     }
   }
 
@@ -485,13 +509,18 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function themedPlugins(tooltipCallbacks) {
     var theme = chartTheme();
+    var narrow = narrowScreenMedia.matches;
     return {
       legend: {
         display: true,
         position: 'bottom',
         labels: {
           color: theme.text,
-          usePointStyle: true
+          usePointStyle: true,
+          boxWidth: narrow ? 8 : 12,
+          boxHeight: narrow ? 8 : 12,
+          padding: narrow ? 6 : 10,
+          font: { size: narrow ? 10 : 12 }
         }
       },
       tooltip: {
@@ -629,6 +658,38 @@ if (typeof module !== 'undefined' && module.exports) {
     });
 
     scheduleLatestCardNameSizing();
+    updateCardsCollapse();
+  }
+
+  // 狭い画面では最新値カードを最初の1行(3枚)のみ表示し、
+  // トグルボタンで全カードの展開/折りたたみを切り替える。
+  function updateCardsCollapse() {
+    var container = document.getElementById('latest-cards');
+    var toggle = document.getElementById('latest-cards-toggle');
+    if (!container || !toggle) return;
+
+    var cards = Array.prototype.slice.call(container.querySelectorAll('.latest-card'));
+    var hasOverflow = narrowScreenMedia.matches && cards.length > CARDS_COLLAPSED_VISIBLE_COUNT;
+
+    toggle.hidden = !hasOverflow;
+    toggle.setAttribute('aria-expanded', String(cardsExpanded));
+    toggle.textContent = cardsExpanded ? '閉じる ▴' : 'すべて表示 ▾';
+
+    cards.forEach(function (card, index) {
+      var shouldHide = hasOverflow && !cardsExpanded && index >= CARDS_COLLAPSED_VISIBLE_COUNT;
+      card.classList.toggle('card-hidden-collapsed', shouldHide);
+    });
+  }
+
+  function initCardsToggle() {
+    var toggle = document.getElementById('latest-cards-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function () {
+      cardsExpanded = !cardsExpanded;
+      saveCardsExpandedPref(cardsExpanded);
+      updateCardsCollapse();
+    });
+    narrowScreenMedia.addEventListener('change', updateCardsCollapse);
   }
 
   function resizeLatestCardNames() {
@@ -1180,6 +1241,28 @@ if (typeof module !== 'undefined' && module.exports) {
       });
     });
 
+    var chartPlugins = themedPlugins({
+          title: function (items) {
+            if (!items.length) return '';
+            var raw = items[0].raw;
+            return formatMonthDayWithYear(raw.origDate);
+          },
+          label: function (item) {
+            var raw = item.raw;
+            var text = entry.config.name + ': ' + raw.y.toFixed(1) + '°C';
+            if (raw.note) {
+              text += ' (' + raw.note + ')';
+            }
+            return text;
+          }
+        });
+    chartPlugins.title = {
+      display: true,
+      text: entry.config.name + ' の年比較',
+      color: chartTheme().text,
+      font: { size: 14, weight: '600' }
+    };
+
     var config = {
       type: 'scatter',
       data: { datasets: datasets },
@@ -1206,21 +1289,7 @@ if (typeof module !== 'undefined' && module.exports) {
             title: { display: true, text: '水温 (°C)' }
           })
         },
-        plugins: themedPlugins({
-              title: function (items) {
-                if (!items.length) return '';
-                var raw = items[0].raw;
-                return formatMonthDayWithYear(raw.origDate);
-              },
-              label: function (item) {
-                var raw = item.raw;
-                var text = entry.config.name + ': ' + raw.y.toFixed(1) + '°C';
-                if (raw.note) {
-                  text += ' (' + raw.note + ')';
-                }
-                return text;
-              }
-            })
+        plugins: chartPlugins
       }
     };
 
@@ -1309,7 +1378,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function init() {
     initReloadButton();
+    cardsExpanded = loadCardsExpandedPref();
+    initCardsToggle();
     window.addEventListener('resize', scheduleLatestCardNameSizing);
+    window.addEventListener('resize', updateCardsCollapse);
     updateStatus('データ読み込み中...');
     loadAllData()
       .then(function () {
@@ -1325,8 +1397,9 @@ if (typeof module !== 'undefined' && module.exports) {
         var total = stationsConfig.length;
         var failed = total - loaded;
         updateStatus(
-          '読み込み完了: ' + loaded + '/' + total + ' 系列' +
-          (failed > 0 ? '(' + failed + ' 系列はデータ未取得)' : '')
+          failed > 0
+            ? '⚠ ' + failed + '地点のデータを取得できませんでした'
+            : ''
         );
 
         renderLatestCards();
