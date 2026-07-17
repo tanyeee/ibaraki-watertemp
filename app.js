@@ -379,12 +379,132 @@ var CardTextColorLogic = (function () {
   };
 })();
 
+// 年比較モードの「平年値バンド」計算(月日ごとの平均・最小・最大 + 移動平均平滑化)。
+// DOMに依存させず、Nodeでも実データを使って検証可能にする。
+var NormalBandLogic = (function () {
+  'use strict';
+
+  var MIN_YEARS_FOR_BAND = 4;
+  var SMOOTHING_WINDOW = 7;
+
+  function parseDateParts(dateStr) {
+    var parts = String(dateStr).split('-');
+    return { year: Number(parts[0]), month: Number(parts[1]), day: Number(parts[2]) };
+  }
+
+  // 月日を「2000年(うるう年)基準の通日index」(0〜365)に変換する。
+  // 2/29はindex 59として扱え、平年のデータはそのまま月日で対応する日にマップされる。
+  function dayOfCommonYear(month, day) {
+    var start = Date.UTC(2000, 0, 1);
+    var target = Date.UTC(2000, month - 1, day);
+    return Math.round((target - start) / 86400000);
+  }
+
+  function indexToCommonYearDate(index) {
+    return new Date(2000, 0, 1 + index);
+  }
+
+  function countYears(records) {
+    var years = {};
+    (records || []).forEach(function (record) {
+      years[Number(String(record.date).slice(0, 4))] = true;
+    });
+    return Object.keys(years).length;
+  }
+
+  // 通日indexごとに、全期間の平均・最小・最大を計算する(index 0〜365の366要素、固定長)。
+  function computeMonthDayStats(records) {
+    var buckets = {};
+    (records || []).forEach(function (record) {
+      var parts = parseDateParts(record.date);
+      var idx = dayOfCommonYear(parts.month, parts.day);
+      if (!buckets[idx]) buckets[idx] = [];
+      buckets[idx].push(record.value);
+    });
+
+    var result = [];
+    for (var idx = 0; idx <= 365; idx++) {
+      var values = buckets[idx];
+      if (!values || !values.length) {
+        result.push({ index: idx, mean: null, min: null, max: null, count: 0 });
+        continue;
+      }
+      var sum = 0;
+      var min = values[0];
+      var max = values[0];
+      values.forEach(function (value) {
+        sum += value;
+        if (value < min) min = value;
+        if (value > max) max = value;
+      });
+      result.push({
+        index: idx,
+        mean: sum / values.length,
+        min: min,
+        max: max,
+        count: values.length
+      });
+    }
+    return result;
+  }
+
+  // windowSize(既定7日)の移動平均。端は範囲内で利用可能な値のみで平均する。
+  // 対象日にデータが存在しない(nullの)日は結果もnullのままにする。
+  function movingAverage(stats, field, windowSize) {
+    var half = Math.floor((windowSize || SMOOTHING_WINDOW) / 2);
+    return stats.map(function (stat, i) {
+      if (stat[field] === null || stat[field] === undefined) return null;
+      var sum = 0;
+      var count = 0;
+      for (var offset = -half; offset <= half; offset++) {
+        var j = i + offset;
+        if (j < 0 || j >= stats.length) continue;
+        var value = stats[j][field];
+        if (value === null || value === undefined) continue;
+        sum += value;
+        count += 1;
+      }
+      return count ? sum / count : null;
+    });
+  }
+
+  // 平年値バンド(月日ごとの平滑化済み平均・最小・最大)を計算する。
+  // 対象年数がMIN_YEARS_FOR_BAND未満の場合はnullを返す。
+  function computeBand(records) {
+    if (countYears(records) < MIN_YEARS_FOR_BAND) return null;
+    var stats = computeMonthDayStats(records);
+    var smoothedMean = movingAverage(stats, 'mean', SMOOTHING_WINDOW);
+    var smoothedMin = movingAverage(stats, 'min', SMOOTHING_WINDOW);
+    var smoothedMax = movingAverage(stats, 'max', SMOOTHING_WINDOW);
+    return stats.map(function (stat, i) {
+      return {
+        x: indexToCommonYearDate(stat.index),
+        mean: smoothedMean[i],
+        min: smoothedMin[i],
+        max: smoothedMax[i]
+      };
+    });
+  }
+
+  return {
+    MIN_YEARS_FOR_BAND: MIN_YEARS_FOR_BAND,
+    SMOOTHING_WINDOW: SMOOTHING_WINDOW,
+    dayOfCommonYear: dayOfCommonYear,
+    indexToCommonYearDate: indexToCommonYearDate,
+    countYears: countYears,
+    computeMonthDayStats: computeMonthDayStats,
+    movingAverage: movingAverage,
+    computeBand: computeBand
+  };
+})();
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = YearlyComparisonLogic;
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
   module.exports.DateRangeLogic = DateRangeLogic;
   module.exports.ColorAssignmentLogic = ColorAssignmentLogic;
   module.exports.CardTextColorLogic = CardTextColorLogic;
+  module.exports.NormalBandLogic = NormalBandLogic;
 }
 
 (function () {
@@ -403,6 +523,12 @@ if (typeof module !== 'undefined' && module.exports) {
   ];
   var YEARLY_BG_LIGHT = 'rgba(95, 105, 115, 0.20)';
   var YEARLY_BG_DARK = 'rgba(205, 215, 225, 0.18)';
+  // 平年値バンド(範囲の塗り・平均値の線)の配色。テーマに応じて切り替える。
+  var NORMAL_BAND_FILL_LIGHT = 'rgba(70, 110, 150, 0.15)';
+  var NORMAL_BAND_FILL_DARK = 'rgba(150, 190, 225, 0.16)';
+  var NORMAL_BAND_LINE_LIGHT = 'rgba(60, 85, 105, 0.85)';
+  var NORMAL_BAND_LINE_DARK = 'rgba(205, 220, 232, 0.85)';
+  var NORMAL_BAND_STORAGE_KEY = 'watertemp_yearly_normal_band';
 
   // ---- アプリ状態 ----
   var stationsConfig = [];         // config/stations.json の series 配列
@@ -601,7 +727,11 @@ if (typeof module !== 'undefined' && module.exports) {
           boxWidth: narrow ? 8 : 12,
           boxHeight: narrow ? 8 : 12,
           padding: narrow ? 6 : 10,
-          font: { size: narrow ? 10 : 12 }
+          font: { size: narrow ? 10 : 12 },
+          filter: function (item, data) {
+            var dataset = data.datasets[item.datasetIndex];
+            return !(dataset && dataset._hideFromLegend);
+          }
         }
       },
       tooltip: {
@@ -1222,6 +1352,52 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
+  // 平年値バンド(月日ごとの平均・最小・最大)を初回のみ計算しentryにキャッシュする。
+  // 対象年数が不足している場合はnullをキャッシュし、以後は再計算しない。
+  function prepareNormalBand(entry) {
+    if (entry.normalBand !== undefined) return entry.normalBand;
+    entry.normalBand = NormalBandLogic.computeBand(entry.records);
+    return entry.normalBand;
+  }
+
+  // 平年値バンドのチェックボックスの有効/無効・注記を、対象系列の年数に応じて更新する。
+  function updateNormalBandControl(entry) {
+    var checkbox = document.getElementById('yearly-normal-band');
+    var note = document.getElementById('yearly-normal-band-note');
+    if (!checkbox) return;
+    var yearCount = NormalBandLogic.countYears(entry.records);
+    var available = yearCount >= NormalBandLogic.MIN_YEARS_FOR_BAND;
+    checkbox.disabled = !available;
+    if (note) {
+      note.textContent = available
+        ? ''
+        : 'データ蓄積中(' + yearCount + '年分、' + NormalBandLogic.MIN_YEARS_FOR_BAND + '年以上で表示可)';
+    }
+  }
+
+  // 平年値バンドの表示可否(チェック状態)をlocalStorageから復元する。
+  // 未保存時は既定値のON(true)を返す。
+  function loadNormalBandPref() {
+    var storage = getLocalStorage();
+    if (!storage) return true;
+    try {
+      var value = storage.getItem(NORMAL_BAND_STORAGE_KEY);
+      return value === null ? true : value === '1';
+    } catch (err) {
+      return true;
+    }
+  }
+
+  function saveNormalBandPref(checked) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(NORMAL_BAND_STORAGE_KEY, checked ? '1' : '0');
+    } catch (err) {
+      // 保存領域が使えない環境では黙って無視する
+    }
+  }
+
   function yearlyPoint(record, year) {
     var date = parseDate(record.date);
     return {
@@ -1305,6 +1481,7 @@ if (typeof module !== 'undefined' && module.exports) {
       );
     }
     syncYearlyControls(entry);
+    updateNormalBandControl(entry);
     if (currentMode === 'yearly' || yearlyChartRendered) {
       renderYearlyChart();
     }
@@ -1358,6 +1535,14 @@ if (typeof module !== 'undefined' && module.exports) {
       renderYearlyChart();
     });
     document.getElementById('yearly-show-all').addEventListener('change', renderYearlyChart);
+
+    var normalBandCheckbox = document.getElementById('yearly-normal-band');
+    normalBandCheckbox.checked = loadNormalBandPref();
+    normalBandCheckbox.addEventListener('change', function () {
+      saveNormalBandPref(normalBandCheckbox.checked);
+      renderYearlyChart();
+    });
+
     handleYearlySeriesChange();
   }
 
@@ -1372,6 +1557,65 @@ if (typeof module !== 'undefined' && module.exports) {
     prepareYearlyEntry(entry);
     var showAllYears = document.getElementById('yearly-show-all').checked;
     var datasets = [];
+
+    var normalBandCheckbox = document.getElementById('yearly-normal-band');
+    if (normalBandCheckbox && normalBandCheckbox.checked && !normalBandCheckbox.disabled) {
+      var band = prepareNormalBand(entry);
+      if (band) {
+        var minPoints = band.map(function (b) { return { x: b.x, y: b.min }; });
+        var maxPoints = band.map(function (b) { return { x: b.x, y: b.max }; });
+        var meanPoints = band.map(function (b) { return { x: b.x, y: b.mean }; });
+        var bandFillColor = isDarkMode ? NORMAL_BAND_FILL_DARK : NORMAL_BAND_FILL_LIGHT;
+        var bandLineColor = isDarkMode ? NORMAL_BAND_LINE_DARK : NORMAL_BAND_LINE_LIGHT;
+
+        // 最小値のデータセット(不可視。次のデータセットのfill基準線として使う)
+        datasets.push({
+          label: '平年範囲(最小・内部用)',
+          data: minPoints,
+          type: 'line',
+          showLine: true,
+          fill: false,
+          borderWidth: 0,
+          pointRadius: 0,
+          pointHitRadius: 0,
+          spanGaps: true,
+          tension: 0,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          _hideFromLegend: true
+        });
+        // 最大値のデータセット(直前の最小値データセットとの間を塗って範囲バンドにする)
+        datasets.push({
+          label: '平年範囲',
+          data: maxPoints,
+          type: 'line',
+          showLine: true,
+          fill: '-1',
+          borderWidth: 0,
+          pointRadius: 0,
+          pointHitRadius: 0,
+          spanGaps: true,
+          tension: 0,
+          borderColor: 'transparent',
+          backgroundColor: bandFillColor
+        });
+        // 平均値の細い実線
+        datasets.push({
+          label: '平均値',
+          data: meanPoints,
+          type: 'line',
+          showLine: true,
+          fill: false,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHitRadius: 0,
+          spanGaps: true,
+          tension: 0.15,
+          borderColor: bandLineColor,
+          backgroundColor: bandLineColor
+        });
+      }
+    }
 
     if (showAllYears) {
       var backgroundPoints = [];
