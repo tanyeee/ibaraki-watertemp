@@ -9,6 +9,7 @@
   --color-accent: #0072B2;
   --color-accent-contrast: #ffffff;
   --color-focus-ring: rgba(0, 114, 178, 0.25);
+  --color-water-drop: #c5cbd1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +24,7 @@
     --color-accent: #56B4E9;
     --color-accent-contrast: #07141c;
     --color-focus-ring: rgba(86, 180, 233, 0.35);
+    --color-water-drop: #000000;
   }
 }
 
@@ -39,6 +41,7 @@
   --color-accent: #0072B2;
   --color-accent-contrast: #ffffff;
   --color-focus-ring: rgba(0, 114, 178, 0.25);
+  --color-water-drop: #c5cbd1;
 }
 
 :root[data-theme="dark"] {
@@ -52,6 +55,7 @@
   --color-accent: #56B4E9;
   --color-accent-contrast: #07141c;
   --color-focus-ring: rgba(86, 180, 233, 0.35);
+  --color-water-drop: #000000;
 }
 
 * {
@@ -153,10 +157,10 @@ a {
   outline-offset: 2px;
 }
 
-/* 水滴アイコンはライト/ダーク両テーマで目立たないよう常に黒にする */
+/* 水滴アイコンは各テーマの背景に溶け込む控えめな色にする */
 .water-drop-button {
-  color: #000000;
-  border-color: #000000;
+  color: var(--color-water-drop);
+  border-color: var(--color-water-drop);
 }
 
 .latest-cards {
