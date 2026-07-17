@@ -1713,7 +1713,7 @@ if (typeof module !== 'undefined' && module.exports) {
         });
         // 最大値のデータセット(直前の最小値データセットとの間を塗って範囲バンドにする)
         datasets.push({
-          label: '平年範囲',
+          label: '過去の最大・最小範囲',
           data: maxPoints,
           type: 'line',
           showLine: true,
