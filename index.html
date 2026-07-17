@@ -28,9 +28,37 @@
     <div id="latest-cards" class="latest-cards" aria-live="polite">
       <p class="loading-text">データ読み込み中...</p>
     </div>
-    <button type="button" id="latest-cards-toggle" class="latest-cards-toggle" aria-expanded="false" hidden>すべて表示 ▾</button>
+    <div class="latest-cards-actions">
+      <button type="button" id="latest-cards-toggle" class="latest-cards-toggle" aria-expanded="false" hidden>すべて表示 ▾</button>
+      <button type="button" id="latest-cards-customize" class="latest-cards-customize" disabled>表示を編集</button>
+    </div>
   </div>
 </header>
+
+<dialog id="latest-cards-dialog" class="card-customizer" aria-labelledby="card-customizer-title" aria-describedby="card-customizer-help">
+  <form id="latest-cards-form" method="dialog">
+    <div class="card-customizer-header">
+      <h2 id="card-customizer-title">閉じた時のカード表示</h2>
+      <button type="button" id="card-customizer-close" class="card-customizer-close" aria-label="設定を閉じる">×</button>
+    </div>
+    <p id="card-customizer-help" class="card-customizer-help">行数を選び、各位置に表示する地点を指定してください。空欄も選べます。</p>
+    <fieldset class="card-row-picker">
+      <legend>表示する行数</legend>
+      <div class="card-row-options">
+        <label><input type="radio" name="card-rows" value="1"><span>1行</span></label>
+        <label><input type="radio" name="card-rows" value="2"><span>2行</span></label>
+        <label><input type="radio" name="card-rows" value="3"><span>3行</span></label>
+      </div>
+    </fieldset>
+    <div id="card-customizer-slots" class="card-customizer-slots"></div>
+    <div class="card-customizer-footer">
+      <button type="button" id="card-customizer-reset" class="card-customizer-secondary">初期設定に戻す</button>
+      <span class="card-customizer-footer-spacer"></span>
+      <button type="button" id="card-customizer-cancel" class="card-customizer-secondary">キャンセル</button>
+      <button type="submit" class="card-customizer-save">保存</button>
+    </div>
+  </form>
+</dialog>
 
 <main>
   <nav class="tabs" role="tablist">

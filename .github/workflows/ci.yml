@@ -26,6 +26,9 @@ jobs:
       - name: Check JavaScript syntax
         run: node --check app.js
 
+      - name: Run JavaScript tests
+        run: node tests/test_app_logic.js
+
       - name: Run Python tests
         run: python -m unittest discover -s tests -v
 

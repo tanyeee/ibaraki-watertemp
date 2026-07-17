@@ -258,6 +258,91 @@ var SeriesSelectionLogic = (function () {
   };
 })();
 
+// 最新値カードの行数・配置はDOMに依存させず、保存値が壊れていても
+// 安全な配置へ正規化できるようにする。
+var CardLayoutLogic = (function () {
+  'use strict';
+
+  var COLUMNS = 3;
+  var DEFAULT_ROWS = 2;
+  var MIN_ROWS = 1;
+  var MAX_ROWS = 3;
+
+  function normalizeRows(value) {
+    var rows = Number(value);
+    return Number.isInteger(rows) && rows >= MIN_ROWS && rows <= MAX_ROWS
+      ? rows
+      : DEFAULT_ROWS;
+  }
+
+  function capacity(rows) {
+    return normalizeRows(rows) * COLUMNS;
+  }
+
+  function normalizeSlots(slots, rows, validIds) {
+    var allowed = {};
+    var seen = {};
+    (validIds || []).forEach(function (id) { allowed[id] = true; });
+    var source = Array.isArray(slots) ? slots : [];
+    var result = [];
+    for (var index = 0; index < capacity(rows); index += 1) {
+      var id = source[index];
+      if (typeof id === 'string' && allowed[id] && !seen[id]) {
+        result.push(id);
+        seen[id] = true;
+      } else {
+        result.push(null);
+      }
+    }
+    return result;
+  }
+
+  function defaultLayout(defaultIds, validIds) {
+    return {
+      rows: DEFAULT_ROWS,
+      slots: normalizeSlots(defaultIds, DEFAULT_ROWS, validIds)
+    };
+  }
+
+  function normalizeLayout(saved, defaultIds, validIds) {
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      return defaultLayout(defaultIds, validIds);
+    }
+    var rows = normalizeRows(saved.rows);
+    return { rows: rows, slots: normalizeSlots(saved.slots, rows, validIds) };
+  }
+
+  function selectedIds(layout) {
+    return (layout && Array.isArray(layout.slots) ? layout.slots : []).filter(Boolean);
+  }
+
+  function assignSlot(slots, index, nextId) {
+    var result = Array.isArray(slots) ? slots.slice() : [];
+    var previousId = result[index] || null;
+    var normalizedNextId = typeof nextId === 'string' && nextId ? nextId : null;
+    var existingIndex = normalizedNextId ? result.indexOf(normalizedNextId) : -1;
+    if (existingIndex !== -1 && existingIndex !== index) {
+      result[existingIndex] = previousId;
+    }
+    result[index] = normalizedNextId;
+    return result;
+  }
+
+  return {
+    COLUMNS: COLUMNS,
+    DEFAULT_ROWS: DEFAULT_ROWS,
+    MIN_ROWS: MIN_ROWS,
+    MAX_ROWS: MAX_ROWS,
+    normalizeRows: normalizeRows,
+    capacity: capacity,
+    normalizeSlots: normalizeSlots,
+    defaultLayout: defaultLayout,
+    normalizeLayout: normalizeLayout,
+    selectedIds: selectedIds,
+    assignSlot: assignSlot
+  };
+})();
+
 // 地点比較の色は、設定順に各 group 内のパレットを割り当てる。
 // DOMに依存させず、Nodeでもライト/ダーク双方を検証可能にする。
 var ColorAssignmentLogic = (function () {
@@ -505,6 +590,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.ColorAssignmentLogic = ColorAssignmentLogic;
   module.exports.CardTextColorLogic = CardTextColorLogic;
   module.exports.NormalBandLogic = NormalBandLogic;
+  module.exports.CardLayoutLogic = CardLayoutLogic;
 }
 
 (function () {
@@ -551,7 +637,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var latestCardResizeFrame = null;
   var CARDS_EXPANDED_STORAGE_KEY = 'watertemp_cards_expanded';
   // 折りたたみ時に表示する最新値カード(3枚×2行、この順で表示)
-  var FEATURED_CARD_IDS = [
+  var DEFAULT_FEATURED_CARD_IDS = [
     'sea_area137',
     'sea_area138',
     'tapwater',
@@ -559,6 +645,11 @@ if (typeof module !== 'undefined' && module.exports) {
     'kitaura_jinguubashi',
     'tonegawa_down_upper'
   ];
+  var CARD_LAYOUT_STORAGE_KEY = 'watertemp_featured_card_layout_v1';
+  var featuredCardLayout = {
+    rows: CardLayoutLogic.DEFAULT_ROWS,
+    slots: DEFAULT_FEATURED_CARD_IDS.slice()
+  };
   var cardsExpanded = false;
 
   // ---- ユーティリティ ----
@@ -595,6 +686,42 @@ if (typeof module !== 'undefined' && module.exports) {
       storage.setItem(CARDS_EXPANDED_STORAGE_KEY, expanded ? '1' : '0');
     } catch (err) {
       // 保存領域が使えない環境では黙って無視する
+    }
+  }
+
+  function availableCardIds() {
+    return stationsConfig.map(function (station) { return station.id; });
+  }
+
+  function loadFeaturedCardLayout() {
+    var storage = getLocalStorage();
+    var saved = null;
+    if (storage) {
+      try {
+        saved = JSON.parse(storage.getItem(CARD_LAYOUT_STORAGE_KEY));
+      } catch (err) {
+        saved = null;
+      }
+    }
+    return CardLayoutLogic.normalizeLayout(
+      saved,
+      DEFAULT_FEATURED_CARD_IDS,
+      availableCardIds()
+    );
+  }
+
+  function saveFeaturedCardLayout(layout) {
+    featuredCardLayout = CardLayoutLogic.normalizeLayout(
+      layout,
+      DEFAULT_FEATURED_CARD_IDS,
+      availableCardIds()
+    );
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(CARD_LAYOUT_STORAGE_KEY, JSON.stringify(featuredCardLayout));
+    } catch (err) {
+      // 保存領域が使えない環境では現在のページ内だけで反映する
     }
   }
 
@@ -836,15 +963,13 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
-  // 折りたたみ時に表示する厳選カード(表示可能なもののみ、指定順)。
-  function featuredStations() {
-    var visibleById = {};
-    primaryVisibleStations().forEach(function (station) {
-      visibleById[station.id] = station;
+  // 折りたたみ時に表示するカード。null は空き枠として位置を維持する。
+  function featuredSlotStations() {
+    var stationById = {};
+    stationsConfig.forEach(function (station) { stationById[station.id] = station; });
+    return featuredCardLayout.slots.map(function (id) {
+      return id ? stationById[id] || null : null;
     });
-    return FEATURED_CARD_IDS.map(function (id) {
-      return visibleById[id];
-    }).filter(Boolean);
   }
 
   function buildLatestCardElement(station) {
@@ -884,8 +1009,16 @@ if (typeof module !== 'undefined' && module.exports) {
 
     var featuredWrap = document.createElement('div');
     featuredWrap.className = 'latest-cards-featured';
-    featuredStations().forEach(function (station) {
-      featuredWrap.appendChild(buildLatestCardElement(station));
+    featuredWrap.dataset.rows = String(featuredCardLayout.rows);
+    featuredSlotStations().forEach(function (station) {
+      if (station) {
+        featuredWrap.appendChild(buildLatestCardElement(station));
+      } else {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'latest-card-placeholder';
+        placeholder.setAttribute('aria-hidden', 'true');
+        featuredWrap.appendChild(placeholder);
+      }
     });
 
     var groupsWrap = document.createElement('div');
@@ -908,15 +1041,24 @@ if (typeof module !== 'undefined' && module.exports) {
   function updateCardsCollapse() {
     var container = document.getElementById('latest-cards');
     var toggle = document.getElementById('latest-cards-toggle');
-    if (!container || !toggle) return;
+    var customize = document.getElementById('latest-cards-customize');
+    if (!container || !toggle || !customize) return;
 
-    var hasOverflow = primaryVisibleStations().length > featuredStations().length;
+    var selected = {};
+    CardLayoutLogic.selectedIds(featuredCardLayout).forEach(function (id) {
+      selected[id] = true;
+    });
+    var hasOverflow = primaryVisibleStations().some(function (station) {
+      return !selected[station.id];
+    });
+    var effectivelyExpanded = hasOverflow && cardsExpanded;
 
     toggle.hidden = !hasOverflow;
-    toggle.setAttribute('aria-expanded', String(cardsExpanded));
-    toggle.textContent = cardsExpanded ? '閉じる ▴' : 'すべて表示 ▾';
+    toggle.setAttribute('aria-expanded', String(effectivelyExpanded));
+    toggle.textContent = effectivelyExpanded ? '閉じる ▴' : 'すべて表示 ▾';
+    customize.hidden = effectivelyExpanded;
 
-    container.classList.toggle('cards-expanded', hasOverflow && cardsExpanded);
+    container.classList.toggle('cards-expanded', effectivelyExpanded);
   }
 
   function initCardsToggle() {
@@ -927,6 +1069,151 @@ if (typeof module !== 'undefined' && module.exports) {
       saveCardsExpandedPref(cardsExpanded);
       updateCardsCollapse();
     });
+  }
+
+  function closeCardCustomizer(dialog) {
+    if (typeof dialog.close === 'function') {
+      dialog.close();
+    } else {
+      dialog.removeAttribute('open');
+    }
+  }
+
+  function cardSlotLabel(index) {
+    var row = Math.floor(index / CardLayoutLogic.COLUMNS) + 1;
+    var columnLabels = ['左', '中央', '右'];
+    return row + '行目・' + columnLabels[index % CardLayoutLogic.COLUMNS];
+  }
+
+  function cardOptionLabel(station) {
+    var entry = seriesData[station.id];
+    if (entry && entry.dormant) return station.name + '（休止中）';
+    if (!entry || !entry.loaded) return station.name + '（データ未取得）';
+    return station.name;
+  }
+
+  function initCardCustomizer() {
+    var dialog = document.getElementById('latest-cards-dialog');
+    var openButton = document.getElementById('latest-cards-customize');
+    var form = document.getElementById('latest-cards-form');
+    var slotsContainer = document.getElementById('card-customizer-slots');
+    var closeButton = document.getElementById('card-customizer-close');
+    var cancelButton = document.getElementById('card-customizer-cancel');
+    var resetButton = document.getElementById('card-customizer-reset');
+    if (!dialog || !openButton || !form || !slotsContainer) return;
+
+    var draft = null;
+    openButton.disabled = false;
+
+    function expandDraft(layout) {
+      var slots = layout.slots.slice();
+      while (slots.length < CardLayoutLogic.capacity(CardLayoutLogic.MAX_ROWS)) {
+        slots.push(null);
+      }
+      return { rows: layout.rows, slots: slots };
+    }
+
+    function renderSlots(focusIndex) {
+      slotsContainer.innerHTML = '';
+      var slotCount = CardLayoutLogic.capacity(draft.rows);
+      for (var index = 0; index < slotCount; index += 1) {
+        (function (slotIndex) {
+          var label = document.createElement('label');
+          label.className = 'card-customizer-slot';
+
+          var labelText = document.createElement('span');
+          labelText.textContent = cardSlotLabel(slotIndex);
+
+          var select = document.createElement('select');
+          select.dataset.slotIndex = String(slotIndex);
+          select.setAttribute('aria-label', cardSlotLabel(slotIndex) + 'に表示する地点');
+
+          var emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '空欄';
+          select.appendChild(emptyOption);
+
+          SeriesSelectionLogic.groupSeries(stationsConfig).forEach(function (group) {
+            var optgroup = document.createElement('optgroup');
+            optgroup.label = group.name;
+            group.series.forEach(function (station) {
+              var option = document.createElement('option');
+              option.value = station.id;
+              option.textContent = cardOptionLabel(station);
+              optgroup.appendChild(option);
+            });
+            select.appendChild(optgroup);
+          });
+          select.value = draft.slots[slotIndex] || '';
+
+          select.addEventListener('change', function () {
+            var nextId = select.value || null;
+            draft.slots = CardLayoutLogic.assignSlot(draft.slots, slotIndex, nextId);
+            renderSlots(slotIndex);
+          });
+
+          label.appendChild(labelText);
+          label.appendChild(select);
+          slotsContainer.appendChild(label);
+        })(index);
+      }
+      if (typeof focusIndex === 'number') {
+        var focusSelect = slotsContainer.querySelector(
+          'select[data-slot-index="' + focusIndex + '"]'
+        );
+        if (focusSelect) focusSelect.focus();
+      }
+    }
+
+    function syncRowControls() {
+      form.querySelectorAll('input[name="card-rows"]').forEach(function (radio) {
+        radio.checked = Number(radio.value) === draft.rows;
+      });
+    }
+
+    function renderDraft() {
+      syncRowControls();
+      renderSlots();
+    }
+
+    openButton.addEventListener('click', function () {
+      draft = expandDraft(featuredCardLayout);
+      renderDraft();
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+    });
+
+    form.querySelectorAll('input[name="card-rows"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (!draft || !radio.checked) return;
+        draft.rows = CardLayoutLogic.normalizeRows(radio.value);
+        renderSlots();
+      });
+    });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!draft) return;
+      saveFeaturedCardLayout({
+        rows: draft.rows,
+        slots: draft.slots.slice(0, CardLayoutLogic.capacity(draft.rows))
+      });
+      renderLatestCards();
+      closeCardCustomizer(dialog);
+    });
+
+    resetButton.addEventListener('click', function () {
+      draft = expandDraft(CardLayoutLogic.defaultLayout(
+        DEFAULT_FEATURED_CARD_IDS,
+        availableCardIds()
+      ));
+      renderDraft();
+    });
+    closeButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
+    cancelButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
   }
 
   function resizeLatestCardNames() {
@@ -2040,7 +2327,9 @@ if (typeof module !== 'undefined' && module.exports) {
             : ''
         );
 
+        featuredCardLayout = loadFeaturedCardLayout();
         renderLatestCards();
+        initCardCustomizer();
         var restoredSelectedIds = SeriesSelectionLogic.restoreSelectedIds(
           SeriesSelectionLogic.loadSelectedSeriesIds(getLocalStorage()),
           primaryVisibleStations()
