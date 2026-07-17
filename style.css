@@ -652,6 +652,15 @@ main {
   display: none;
 }
 
+.zoom-reset-button {
+  margin-left: 4px;
+}
+
+.zoom-reset-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .ts-display-toggle {
   display: inline-flex;
   margin-bottom: 10px;
@@ -820,6 +829,12 @@ main {
   min-height: 320px;
   position: relative;
   margin-bottom: 12px;
+}
+
+/* ズームプラグイン(hammer.js)がtouch-action:noneを設定しても
+   縦方向のページスクロールを奪わないようにする */
+.chart-wrap canvas {
+  touch-action: pan-y !important;
 }
 
 .status-text {

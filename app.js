@@ -714,6 +714,24 @@ if (typeof module !== 'undefined' && module.exports) {
   };
   Chart.register(inwardTicksPlugin);
 
+  // chartjs-plugin-zoom(CDN読み込み)が利用可能な場合のみズーム/パン機能を有効化する。
+  // CDNが使えない/ブロックされている環境では静かにフォールバック(ズームなし)する。
+  var zoomPluginRef = (typeof window !== 'undefined')
+    ? (window.ChartZoom || window['chartjs-plugin-zoom'] || null)
+    : null;
+  var zoomPluginAvailable = false;
+  if (zoomPluginRef) {
+    try {
+      Chart.register(zoomPluginRef);
+      zoomPluginAvailable = true;
+    } catch (err) {
+      zoomPluginAvailable = false;
+    }
+  }
+
+  // 最近傍スナップ(両モード共通): タップ/ホバー時に最も近いX軸上の点にスナップする。
+  var NEAREST_INTERACTION = { mode: 'nearest', intersect: false, axis: 'x' };
+
   function themedPlugins(tooltipCallbacks) {
     var theme = chartTheme();
     var narrow = narrowScreenMedia.matches;
@@ -1208,6 +1226,30 @@ if (typeof module !== 'undefined' && module.exports) {
   // 少なく奇数月フィルタを適用するとラベルが0件になり得るため対象外とする。
   var SHORT_ROLLING_RANGES = ['1m', '3m', '6m'];
 
+  // ズームリセットボタンの有効/無効を、現在のズーム/パン状態に応じて更新する。
+  function updateTsZoomResetButton() {
+    var btn = document.getElementById('ts-zoom-reset');
+    if (!btn) return;
+    if (!zoomPluginAvailable || !tsChart) {
+      btn.disabled = true;
+      return;
+    }
+    var zoomed = typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
+    btn.disabled = !zoomed;
+  }
+
+  function initTsZoomResetButton() {
+    var btn = document.getElementById('ts-zoom-reset');
+    if (!btn) return;
+    btn.hidden = !zoomPluginAvailable;
+    btn.addEventListener('click', function () {
+      if (tsChart && typeof tsChart.resetZoom === 'function') {
+        tsChart.resetZoom();
+        updateTsZoomResetButton();
+      }
+    });
+  }
+
   function renderTimeseriesChart() {
     var canvas = document.getElementById('chart-timeseries');
     var isJanStart = currentTsDisplayMode === 'jan-start';
@@ -1252,6 +1294,7 @@ if (typeof module !== 'undefined' && module.exports) {
         maintainAspectRatio: false,
         parsing: false,
         animation: false,
+        interaction: NEAREST_INTERACTION,
         scales: {
           x: themedScale(scalesX),
           y: themedScale({
@@ -1276,10 +1319,31 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     };
 
+    if (zoomPluginAvailable) {
+      // X軸のみズーム/パン可能にする(Y軸は固定)。
+      // PC: ホイール+Ctrl(またはトラックパッドのピンチ、ブラウザ上はctrlKey付きwheelとして届く)でズーム、
+      //     ドラッグでパン。スマホ: ピンチでズーム、2本指ドラッグでパン(1本指はページスクロールに委ねる)。
+      config.options.plugins.zoom = {
+        limits: { x: { min: 'original', max: 'original' } },
+        pan: {
+          enabled: true,
+          mode: 'x',
+          onPanComplete: function (ctx) { updateTsZoomResetButton(ctx.chart); }
+        },
+        zoom: {
+          wheel: { enabled: true, modifierKey: 'ctrl' },
+          pinch: { enabled: true },
+          mode: 'x',
+          onZoomComplete: function (ctx) { updateTsZoomResetButton(ctx.chart); }
+        }
+      };
+    }
+
     if (tsChart) {
       tsChart.destroy();
     }
     tsChart = new Chart(canvas.getContext('2d'), config);
+    updateTsZoomResetButton();
   }
 
   function initRangeButtons() {
@@ -1682,6 +1746,7 @@ if (typeof module !== 'undefined' && module.exports) {
         maintainAspectRatio: false,
         parsing: false,
         animation: false,
+        interaction: NEAREST_INTERACTION,
         scales: {
           x: themedScale({
             type: 'time',
@@ -1864,6 +1929,7 @@ if (typeof module !== 'undefined' && module.exports) {
     cardsExpanded = loadCardsExpandedPref();
     initCardsToggle();
     currentTsDisplayMode = loadTsDisplayModePref();
+    initTsZoomResetButton();
     window.addEventListener('resize', scheduleLatestCardNameSizing);
     window.addEventListener('resize', updateCardsCollapse);
     updateStatus('データ読み込み中...');
