@@ -6,6 +6,9 @@ meta + records[{date, value, ...}] 形式のスキーマを扱う各スクリプ
 from __future__ import annotations
 
 import json
+import os
+import stat
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,8 +35,28 @@ def build_meta(source: str, name: str, records: list[dict], extra: dict | None =
 def write_json(path: Path, meta: dict, records: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"meta": meta, "records": records}
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+    # 同じディレクトリに完全な一時ファイルを書いてから置換し、中断時に
+    # 既存JSONが途中までの内容へ切り替わることを防ぐ。
+    temp_path: Path | None = None
+    try:
+        existing_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            temp_path = Path(f.name)
+            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(temp_path, existing_mode)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
     print(f"wrote {path} ({len(records)} records)")
 
 

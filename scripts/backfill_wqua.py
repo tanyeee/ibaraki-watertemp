@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
-import requests
-
+from http_retry import create_retry_session
 from jsonutil import build_meta, load_json, write_json
 from update_wqua import (
     DEFAULT_SLEEP_SEC,
@@ -60,6 +60,34 @@ def refreshed_meta(
     return build_meta(source, name, records, extra=extra)
 
 
+def empty_window_marker(bgn: date, end: date) -> dict[str, str]:
+    return {"bgn": bgn.isoformat(), "end": end.isoformat()}
+
+
+def is_confirmed_empty(existing_meta: dict, bgn: date, end: date) -> bool:
+    """同じ空期間を前回の実行でも確認済みなら True。"""
+    return existing_meta.get("backfill_pending_empty") == empty_window_marker(bgn, end)
+
+
+def write_progress(
+    output: Path,
+    existing_meta: dict,
+    station_id: str,
+    records: list[dict],
+    cursor: date,
+    floor: date,
+    pending_empty: dict[str, str] | None = None,
+) -> dict:
+    """1窓ごとの進捗を保存し、次の保存に使うmetaを返す。"""
+    updated_meta = refreshed_meta(existing_meta, station_id, records, cursor, cursor <= floor)
+    if pending_empty is None:
+        updated_meta.pop("backfill_pending_empty", None)
+    else:
+        updated_meta["backfill_pending_empty"] = pending_empty
+    write_json(output, updated_meta, records)
+    return updated_meta
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="水文水質DBを7日窓で過去方向へバックフィルする")
     parser.add_argument("--station", required=True, help="観測所記号")
@@ -93,7 +121,11 @@ def main() -> None:
             write_json(output, updated_meta, records)
         return
 
-    windows = backward_windows(cursor, args.windows)
+    windows = [
+        (max(win_bgn, floor), win_end)
+        for win_bgn, win_end in backward_windows(cursor, args.windows)
+        if win_end >= floor
+    ]
     next_cursor = cursor - timedelta(days=args.windows * WINDOW_DAYS)
     done = next_cursor <= floor
     print(f"cursor: {cursor.isoformat()} -> {next_cursor.isoformat()} (floor={floor.isoformat()})")
@@ -104,17 +136,48 @@ def main() -> None:
         return
 
     records = payload.get("records", [])
-    session = requests.Session()
-    session.headers.update({"User-Agent": USER_AGENT})
-    for index, (win_bgn, win_end) in enumerate(windows, 1):
-        daily = fetch_window(session, args.station, win_bgn, win_end, args.timeout)
-        records = merge_records(records, daily)
-        print(f"[{index}/{len(windows)}] {len(daily)} 日分取得(累計 {len(records)} 件)")
-        if index < len(windows):
-            time.sleep(args.sleep)
+    session = create_retry_session(USER_AGENT)
+    try:
+        current_meta = meta
+        current_cursor = cursor
+        for index, (win_bgn, win_end) in enumerate(windows, 1):
+            daily = fetch_window(session, args.station, win_bgn, win_end, args.timeout)
+            if not daily and not is_confirmed_empty(current_meta, win_bgn, win_end):
+                marker = empty_window_marker(win_bgn, win_end)
+                write_progress(
+                    output,
+                    current_meta,
+                    args.station,
+                    records,
+                    current_cursor,
+                    floor,
+                    pending_empty=marker,
+                )
+                print(
+                    f"[{index}/{len(windows)}] データが空でした。次回も同じ期間が空なら確定します: "
+                    f"{win_bgn.isoformat()}〜{win_end.isoformat()}"
+                )
+                return
 
-    updated_meta = refreshed_meta(meta, args.station, records, next_cursor, done)
-    write_json(output, updated_meta, records)
+            if not daily:
+                print(f"[{index}/{len(windows)}] 空期間を再確認しました")
+            records = merge_records(records, daily)
+            current_cursor = win_bgn - timedelta(days=1)
+            current_meta = write_progress(
+                output,
+                current_meta,
+                args.station,
+                records,
+                current_cursor,
+                floor,
+            )
+            print(f"[{index}/{len(windows)}] {len(daily)} 日分取得(累計 {len(records)} 件)")
+            if current_cursor <= floor:
+                break
+            if index < len(windows):
+                time.sleep(args.sleep)
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":

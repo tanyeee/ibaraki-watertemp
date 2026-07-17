@@ -11,9 +11,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import requests
-
 from area137_parser import parse_area137_text
+from http_retry import create_retry_session
 from jsonutil import build_meta, write_json
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -28,14 +27,13 @@ AREA_NAMES = {
 
 
 def fetch_area_text(area: int, timeout: int = 60) -> str:
-    session = requests.Session()
-    session.headers.update({"User-Agent": USER_AGENT})
-    resp = session.get(AREA_URL_TEMPLATE.format(area=area), timeout=timeout)
-    resp.raise_for_status()
-    # レスポンスはASCII互換の数値CSVのため、文字コード判定に失敗しても
-    # utf-8として扱えば問題ない。
-    resp.encoding = resp.apparent_encoding or "utf-8"
-    return resp.text
+    with create_retry_session(USER_AGENT) as session:
+        resp = session.get(AREA_URL_TEMPLATE.format(area=area), timeout=timeout)
+        resp.raise_for_status()
+        # レスポンスはASCII互換の数値CSVのため、文字コード判定に失敗しても
+        # utf-8として扱えば問題ない。
+        resp.encoding = resp.apparent_encoding or "utf-8"
+        return resp.text
 
 
 def main() -> None:

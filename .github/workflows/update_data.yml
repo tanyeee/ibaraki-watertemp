@@ -32,31 +32,54 @@ jobs:
           pip install -r requirements.txt
 
       - name: Update sea surface temperature (area137 and area138)
+        id: update_sea
         run: |
-          python scripts/update_sea.py --area 137
-          python scripts/update_sea.py --area 138
+          failures=0
+          for area in 137 138; do
+            echo "=== updating sea area $area ==="
+            if ! python scripts/update_sea.py --area "$area"; then
+              echo "::error::failed to update sea area $area"
+              failures=$((failures + 1))
+            fi
+          done
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
 
       - name: Update river/lake water temperature (enabled stations)
+        id: update_river
         run: |
+          failures=0
           station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
           if [ -z "$station_ids" ]; then
             echo "no enabled river stations"
           fi
           for station_id in $station_ids; do
             echo "=== updating station $station_id ==="
-            python scripts/update_wqua.py --station "$station_id" --days 14
+            if ! python scripts/update_wqua.py --station "$station_id" --days 14; then
+              echo "::error::failed to update river station $station_id"
+              failures=$((failures + 1))
+            fi
           done
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
 
       - name: Backfill river/lake water temperature (enabled stations)
+        id: backfill_river
         run: |
+          failures=0
           station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
           if [ -z "$station_ids" ]; then
             echo "no enabled river stations"
           fi
           for station_id in $station_ids; do
             echo "=== backfilling station $station_id ==="
-            python scripts/backfill_wqua.py --station "$station_id" --windows 4 --floor 20160101
+            if ! python scripts/backfill_wqua.py --station "$station_id" --windows 4 --floor 20160101; then
+              echo "::error::failed to backfill river station $station_id"
+              failures=$((failures + 1))
+            fi
           done
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
+
+      - name: Validate generated data
+        run: python scripts/validate_data.py
 
       - name: Commit and push if changed
         run: |
@@ -67,4 +90,19 @@ jobs:
             git commit -m "Auto update water temperature data"
             git pull --rebase origin "$GITHUB_REF_NAME"
             git push
+          fi
+
+      - name: Fail workflow if any source failed
+        if: always()
+        env:
+          SEA_FAILURES: ${{ steps.update_sea.outputs.failures }}
+          RIVER_FAILURES: ${{ steps.update_river.outputs.failures }}
+          BACKFILL_FAILURES: ${{ steps.backfill_river.outputs.failures }}
+        run: |
+          sea_failures=${SEA_FAILURES:-0}
+          river_failures=${RIVER_FAILURES:-0}
+          backfill_failures=${BACKFILL_FAILURES:-0}
+          if [ "$sea_failures" -ne 0 ] || [ "$river_failures" -ne 0 ] || [ "$backfill_failures" -ne 0 ]; then
+            echo "::error::data update completed with failures: sea=$sea_failures river=$river_failures backfill=$backfill_failures"
+            exit 1
           fi
