@@ -1229,22 +1229,41 @@ if (typeof module !== 'undefined' && module.exports) {
   // ズームリセットボタンの見た目を、現在のズーム/パン状態に応じて更新する。
   // 脱出手段を確実に残すため、プラグインが有効な間はボタン自体は常に押せる
   // (ズーム中でなければ強調表示だけ外す)。
+  // タッチ操作(狭い画面/coarseポインタ)かどうかで操作案内の文言を切り替える。
+  function tsZoomHintText() {
+    var isTouch = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
+      || narrowScreenMedia.matches;
+    return isTouch ? '横にピンチでズーム' : 'Ctrl+ホイールでズーム';
+  }
+
   function updateTsZoomResetButton() {
     var btn = document.getElementById('ts-zoom-reset');
+    var hint = document.getElementById('ts-zoom-hint');
     if (!btn) return;
     if (!zoomPluginAvailable || !tsChart) {
       btn.disabled = true;
+      if (hint) hint.hidden = true;
       return;
     }
     btn.disabled = false;
     var zoomed = typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
     btn.classList.toggle('zoom-active', !!zoomed);
+    // ズーム中は案内テキストを隠し、リセットボタンだけを残す。
+    if (hint) {
+      hint.textContent = tsZoomHintText();
+      hint.hidden = !!zoomed;
+    }
   }
 
   function initTsZoomResetButton() {
     var btn = document.getElementById('ts-zoom-reset');
+    var hint = document.getElementById('ts-zoom-hint');
     if (!btn) return;
     btn.hidden = !zoomPluginAvailable;
+    if (hint) {
+      hint.hidden = !zoomPluginAvailable;
+      hint.textContent = tsZoomHintText();
+    }
     btn.addEventListener('click', function () {
       // resetZoomが効かない異常状態でも必ず戻れるよう、
       // ズーム解除のうえチャートを作り直すハードリセットにする。
@@ -1498,6 +1517,25 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
+  // 日付が連続しない(欠測)箇所では折れ線を繋がないよう、
+  // 隙間にy=nullの点を挿入する(spanGaps:falseと組み合わせて使う)。
+  // points は同一年内でx(日付)昇順に並んでいる前提。
+  function withYearlyGapBreaks(points) {
+    if (!points.length) return points;
+    var result = [points[0]];
+    for (var i = 1; i < points.length; i++) {
+      var prevDate = parseDate(points[i - 1].origDate);
+      var curDate = parseDate(points[i].origDate);
+      var diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / 86400000);
+      if (diffDays > 1) {
+        var midDate = new Date(prevDate.getTime() + (curDate.getTime() - prevDate.getTime()) / 2);
+        result.push({ x: toCommonYearDate(midDate), y: null });
+      }
+      result.push(points[i]);
+    }
+    return result;
+  }
+
   function currentYearlyEntry() {
     var seriesId = document.getElementById('yearly-series-select').value;
     return seriesData[seriesId] || null;
@@ -1707,35 +1745,54 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     if (showAllYears) {
-      var backgroundPoints = [];
+      // 年ごとにデータセットを分けないと、共通年軸(2000年)上で
+      // 別々の年の点同士が直線で繋がってしまうため年別に分割する。
+      // 凡例には代表として1件だけ出す(残りは非表示にして重複を避ける)。
+      var bgLegendShown = false;
       entry.availableYears.forEach(function (year) {
         if (selectedYearlyYears.indexOf(year) !== -1) return;
-        entry.yearlyRecordsByYear[year].forEach(function (record) {
-          backgroundPoints.push(yearlyPoint(record, year));
+        var bgPoints = withYearlyGapBreaks(
+          entry.yearlyRecordsByYear[year].map(function (record) {
+            return yearlyPoint(record, year);
+          })
+        );
+        var bgColor = isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT;
+        datasets.push({
+          label: 'その他の年',
+          data: bgPoints,
+          type: 'line',
+          showLine: true,
+          spanGaps: false,
+          pointRadius: 0,
+          pointHitRadius: 0,
+          borderWidth: 1,
+          tension: 0.2,
+          backgroundColor: bgColor,
+          borderColor: bgColor,
+          _hideFromLegend: bgLegendShown
         });
-      });
-      datasets.push({
-        label: 'その他の年',
-        data: backgroundPoints,
-        showLine: false,
-        pointRadius: narrowScreenMedia.matches ? 0.5 : 2,
-        pointHoverRadius: 3,
-        backgroundColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT,
-        borderColor: isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT
+        bgLegendShown = true;
       });
     }
 
     selectedYearlyYears.forEach(function (year, index) {
       var color = yearlyColor(index);
-      var points = (entry.yearlyRecordsByYear[year] || []).map(function (record) {
-        return yearlyPoint(record, year);
-      });
+      var points = withYearlyGapBreaks(
+        (entry.yearlyRecordsByYear[year] || []).map(function (record) {
+          return yearlyPoint(record, year);
+        })
+      );
       datasets.push({
         label: year + '年',
         data: points,
-        showLine: false,
-        pointRadius: narrowScreenMedia.matches ? 0.5 : 3,
-        pointHoverRadius: 5,
+        type: 'line',
+        showLine: true,
+        spanGaps: false,
+        pointRadius: 0,
+        pointHitRadius: 6,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+        tension: 0.2,
         backgroundColor: color,
         borderColor: color
       });
