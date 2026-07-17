@@ -269,7 +269,7 @@ var ColorAssignmentLogic = (function () {
       '水道水': ['#E53935'],
       '霞ヶ浦': ['#009E73', '#4CAF50', '#8BC34A'],
       '北浦': ['#9467BD', '#CC79A7', '#E377C2'],
-      '利根川': ['#D55E00', '#F5A623'],
+      '利根川': ['#C97E00', '#F5A623'],
       'その他': ['#0072B2', '#E69F00', '#009E73', '#CC79A7']
     },
     dark: {
@@ -277,7 +277,7 @@ var ColorAssignmentLogic = (function () {
       '水道水': ['#FF5252'],
       '霞ヶ浦': ['#4DD0A8', '#81C784', '#AED581'],
       '北浦': ['#B39DDB', '#E88AC5', '#F48FB1'],
-      '利根川': ['#FF8A65', '#FFC04D'],
+      '利根川': ['#E8A93D', '#FFC04D'],
       'その他': ['#56B4E9', '#FFB74D', '#4DD0A8', '#E88AC5']
     }
   };
@@ -410,7 +410,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var currentMode = 'timeseries';
   var currentRange = '1y';
   var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
-  var currentTsDisplayMode = 'jan-start'; // 'jan-start' | 'rolling'
+  var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling'
   var TICK_MARK_LENGTH = 6;
   var showDormantStations = false;
   var tsChart = null;
@@ -472,15 +472,15 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 
   // 場所比較モードの表示形式(1月始まり/直近表示)をlocalStorageから復元する。
-  // 未保存/破損時は既定値の「1月始まり」を返す。
+  // 未保存/破損時は既定値の「直近表示」を返す。
   function loadTsDisplayModePref() {
     var storage = getLocalStorage();
-    if (!storage) return 'jan-start';
+    if (!storage) return 'rolling';
     try {
       var value = storage.getItem(TS_DISPLAY_MODE_STORAGE_KEY);
-      return value === 'rolling' ? 'rolling' : 'jan-start';
+      return value === 'jan-start' ? 'jan-start' : 'rolling';
     } catch (err) {
-      return 'jan-start';
+      return 'rolling';
     }
   }
 
