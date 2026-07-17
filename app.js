@@ -1226,7 +1226,9 @@ if (typeof module !== 'undefined' && module.exports) {
   // 少なく奇数月フィルタを適用するとラベルが0件になり得るため対象外とする。
   var SHORT_ROLLING_RANGES = ['1m', '3m', '6m'];
 
-  // ズームリセットボタンの有効/無効を、現在のズーム/パン状態に応じて更新する。
+  // ズームリセットボタンの見た目を、現在のズーム/パン状態に応じて更新する。
+  // 脱出手段を確実に残すため、プラグインが有効な間はボタン自体は常に押せる
+  // (ズーム中でなければ強調表示だけ外す)。
   function updateTsZoomResetButton() {
     var btn = document.getElementById('ts-zoom-reset');
     if (!btn) return;
@@ -1234,8 +1236,9 @@ if (typeof module !== 'undefined' && module.exports) {
       btn.disabled = true;
       return;
     }
+    btn.disabled = false;
     var zoomed = typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
-    btn.disabled = !zoomed;
+    btn.classList.toggle('zoom-active', !!zoomed);
   }
 
   function initTsZoomResetButton() {
@@ -1243,10 +1246,14 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!btn) return;
     btn.hidden = !zoomPluginAvailable;
     btn.addEventListener('click', function () {
-      if (tsChart && typeof tsChart.resetZoom === 'function') {
-        tsChart.resetZoom();
-        updateTsZoomResetButton();
-      }
+      // resetZoomが効かない異常状態でも必ず戻れるよう、
+      // ズーム解除のうえチャートを作り直すハードリセットにする。
+      try {
+        if (tsChart && typeof tsChart.resetZoom === 'function') {
+          tsChart.resetZoom('none');
+        }
+      } catch (err) { /* 異常状態でも下の再構築で復帰する */ }
+      renderTimeseriesChart();
     });
   }
 
@@ -1282,8 +1289,10 @@ if (typeof module !== 'undefined' && module.exports) {
       scalesX.afterBuildTicks = keepOddMonthTicks;
     }
     if (bounds.start) {
-      scalesX.min = bounds.start;
-      scalesX.max = bounds.end;
+      // Dateオブジェクトを渡すとズームプラグインが毎回「外部変更」と誤検知して
+      // 元範囲を再学習し、ズーム状態が壊れるため数値(エポックms)で渡す
+      scalesX.min = bounds.start.getTime();
+      scalesX.max = bounds.end.getTime();
     }
 
     var config = {
@@ -1324,16 +1333,31 @@ if (typeof module !== 'undefined' && module.exports) {
       // PC: ホイール+Ctrl(またはトラックパッドのピンチ、ブラウザ上はctrlKey付きwheelとして届く)でズーム、
       //     ドラッグでパン。スマホ: ピンチでズーム、2本指ドラッグでパン(1本指はページスクロールに委ねる)。
       config.options.plugins.zoom = {
-        limits: { x: { min: 'original', max: 'original' } },
+        // minRange: 拡大しすぎて操作不能になるのを防ぐ(最小7日幅まで)
+        limits: { x: { min: 'original', max: 'original', minRange: 7 * 24 * 60 * 60 * 1000 } },
         pan: {
           enabled: true,
           mode: 'x',
+          onPan: function (ctx) { updateTsZoomResetButton(ctx.chart); },
           onPanComplete: function (ctx) { updateTsZoomResetButton(ctx.chart); }
         },
         zoom: {
           wheel: { enabled: true, modifierKey: 'ctrl' },
           pinch: { enabled: true },
           mode: 'x',
+          // limits.minRange がプラグイン側で効かないため、下限(7日)に達したら
+          // それ以上のズームイン操作自体をキャンセルする。スケールを外から書き換える
+          // 方式はプラグインが「元の範囲」を誤学習してズームアウト不能になるので不可。
+          onZoomStart: function (ctx) {
+            var s = ctx.chart.scales.x;
+            if (!s) return;
+            var MINR = 7 * 24 * 60 * 60 * 1000;
+            var e = ctx.event || {};
+            var zoomingIn = (typeof e.deltaY === 'number') ? e.deltaY < 0
+              : (typeof e.scale === 'number') ? e.scale > 1 : true;
+            if (zoomingIn && (s.max - s.min) <= MINR * 1.05) return false;
+          },
+          onZoom: function (ctx) { updateTsZoomResetButton(ctx.chart); },
           onZoomComplete: function (ctx) { updateTsZoomResetButton(ctx.chart); }
         }
       };
@@ -1347,7 +1371,8 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 
   function initRangeButtons() {
-    var buttons = document.querySelectorAll('#range-buttons button');
+    // 同じ行にあるズームリセットボタン(data-rangeなし)を誤って拾わないこと
+    var buttons = document.querySelectorAll('#range-buttons button[data-range]');
     buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
         buttons.forEach(function (b) { b.classList.remove('active'); });

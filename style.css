@@ -661,6 +661,13 @@ main {
   cursor: default;
 }
 
+/* ズーム/パン中の強調表示 */
+.zoom-reset-button.zoom-active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
 .ts-display-toggle {
   display: inline-flex;
   margin-bottom: 10px;
