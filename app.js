@@ -890,6 +890,44 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
+  // 場所比較の凡例はcanvas外のHTMLグリッドに描画し、狭い画面でも
+  // 名称が重ならないようにする。クリック時の系列表示切替は従来どおり維持する。
+  var timeseriesHtmlLegendPlugin = {
+    id: 'timeseriesHtmlLegend',
+    afterUpdate: function (chart) {
+      var container = document.getElementById('chart-timeseries-legend');
+      if (!container || chart.canvas.id !== 'chart-timeseries') return;
+      container.innerHTML = '';
+
+      var items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+      items.forEach(function (item) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chart-html-legend-item';
+        button.classList.toggle('is-hidden', !!item.hidden);
+        button.setAttribute('aria-pressed', String(!item.hidden));
+        button.setAttribute('aria-label', item.text + 'の表示を切り替え');
+
+        var marker = document.createElement('span');
+        marker.className = 'chart-html-legend-marker';
+        marker.style.backgroundColor = String(item.fillStyle || item.strokeStyle || 'transparent');
+
+        var label = document.createElement('span');
+        label.className = 'chart-html-legend-label';
+        label.textContent = item.text;
+
+        button.appendChild(marker);
+        button.appendChild(label);
+        button.addEventListener('click', function () {
+          chart.setDatasetVisibility(item.datasetIndex, !chart.isDatasetVisible(item.datasetIndex));
+          chart.update();
+        });
+        container.appendChild(button);
+      });
+      container.hidden = items.length === 0;
+    }
+  };
+
   // ---- データ読み込み ----
 
   function loadStationsConfig() {
@@ -1520,7 +1558,7 @@ if (typeof module !== 'undefined' && module.exports) {
   function tsZoomHintText() {
     var isTouch = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
       || narrowScreenMedia.matches;
-    return isTouch ? '横にピンチでズーム' : 'Ctrl+ホイールでズーム';
+    return isTouch ? '横方向にピンチして拡大' : 'Ctrl+ホイールで拡大';
   }
 
   function updateTsZoomResetButton() {
@@ -1532,20 +1570,21 @@ if (typeof module !== 'undefined' && module.exports) {
       if (hint) hint.hidden = true;
       return;
     }
-    btn.disabled = false;
     var zoomed = typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
+    btn.disabled = !zoomed;
     btn.classList.toggle('zoom-active', !!zoomed);
-    // ズーム中は案内テキストを隠し、リセットボタンだけを残す。
     if (hint) {
       hint.textContent = tsZoomHintText();
-      hint.hidden = !!zoomed;
+      hint.hidden = false;
     }
   }
 
   function initTsZoomResetButton() {
     var btn = document.getElementById('ts-zoom-reset');
     var hint = document.getElementById('ts-zoom-hint');
+    var toolbar = document.getElementById('ts-chart-toolbar');
     if (!btn) return;
+    if (toolbar) toolbar.hidden = !zoomPluginAvailable;
     btn.hidden = !zoomPluginAvailable;
     if (hint) {
       hint.hidden = !zoomPluginAvailable;
@@ -1604,6 +1643,7 @@ if (typeof module !== 'undefined' && module.exports) {
     var config = {
       type: 'scatter',
       data: { datasets: datasets },
+      plugins: [timeseriesHtmlLegendPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -1633,6 +1673,7 @@ if (typeof module !== 'undefined' && module.exports) {
             })
       }
     };
+    config.options.plugins.legend.display = false;
 
     if (zoomPluginAvailable) {
       // X軸のみズーム/パン可能にする(Y軸は固定)。

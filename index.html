@@ -72,11 +72,14 @@
       <button type="button" class="ts-display-btn" data-display-mode="rolling" aria-pressed="false">直近表示</button>
     </div>
     <div class="chart-wrap chart-wrap-timeseries">
-      <div class="ts-chart-overlay" id="ts-chart-overlay">
+      <div class="ts-chart-toolbar" id="ts-chart-toolbar">
         <span class="ts-zoom-hint" id="ts-zoom-hint" hidden></span>
         <button type="button" id="ts-zoom-reset" class="zoom-reset-button" disabled hidden>リセット</button>
       </div>
-      <canvas id="chart-timeseries"></canvas>
+      <div class="chart-canvas-area chart-canvas-area-timeseries">
+        <canvas id="chart-timeseries"></canvas>
+      </div>
+      <div id="chart-timeseries-legend" class="chart-html-legend" aria-label="表示地点の凡例"></div>
     </div>
     <div class="controls timeseries-controls">
       <details class="series-picker">
@@ -115,7 +118,9 @@
 
   <section id="panel-yearly" class="panel hidden" role="tabpanel" aria-labelledby="tab-yearly">
     <div class="chart-wrap chart-wrap-yearly">
-      <canvas id="chart-yearly"></canvas>
+      <div class="chart-canvas-area chart-canvas-area-yearly">
+        <canvas id="chart-yearly"></canvas>
+      </div>
     </div>
     <div class="controls yearly-controls">
       <div class="control-group">
