@@ -265,19 +265,19 @@ var ColorAssignmentLogic = (function () {
 
   var PALETTES = {
     light: {
-      '海': ['#0072B2', '#56B4E9'],
-      '水道水': ['#E69F00'],
+      '海': ['#0072B2', '#004C80'],
+      '水道水': ['#E53935'],
       '霞ヶ浦': ['#009E73', '#4CAF50', '#8BC34A'],
       '北浦': ['#9467BD', '#CC79A7', '#E377C2'],
-      '利根川': ['#D55E00', '#FF9E4A'],
+      '利根川': ['#D55E00', '#F5A623'],
       'その他': ['#0072B2', '#E69F00', '#009E73', '#CC79A7']
     },
     dark: {
-      '海': ['#56B4E9', '#90CAF9'],
-      '水道水': ['#E6C229'],
+      '海': ['#56B4E9', '#3D7EBB'],
+      '水道水': ['#FF5252'],
       '霞ヶ浦': ['#4DD0A8', '#81C784', '#AED581'],
       '北浦': ['#B39DDB', '#E88AC5', '#F48FB1'],
-      '利根川': ['#FF8A65', '#E25822'],
+      '利根川': ['#FF8A65', '#FFC04D'],
       'その他': ['#56B4E9', '#FFB74D', '#4DD0A8', '#E88AC5']
     }
   };
@@ -409,6 +409,9 @@ if (typeof module !== 'undefined' && module.exports) {
   var seriesData = {};             // id -> { config, meta, records, color, loaded, error }
   var currentMode = 'timeseries';
   var currentRange = '1y';
+  var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
+  var currentTsDisplayMode = 'jan-start'; // 'jan-start' | 'rolling'
+  var TICK_MARK_LENGTH = 6;
   var showDormantStations = false;
   var tsChart = null;
   var yearlyChart = null;
@@ -468,6 +471,29 @@ if (typeof module !== 'undefined' && module.exports) {
     }
   }
 
+  // 場所比較モードの表示形式(1月始まり/直近表示)をlocalStorageから復元する。
+  // 未保存/破損時は既定値の「1月始まり」を返す。
+  function loadTsDisplayModePref() {
+    var storage = getLocalStorage();
+    if (!storage) return 'jan-start';
+    try {
+      var value = storage.getItem(TS_DISPLAY_MODE_STORAGE_KEY);
+      return value === 'rolling' ? 'rolling' : 'jan-start';
+    } catch (err) {
+      return 'jan-start';
+    }
+  }
+
+  function saveTsDisplayModePref(mode) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(TS_DISPLAY_MODE_STORAGE_KEY, mode);
+    } catch (err) {
+      // 保存領域が使えない環境では黙って無視する
+    }
+  }
+
   function formatDateJP(date) {
     var y = date.getFullYear();
     var m = date.getMonth() + 1;
@@ -507,13 +533,59 @@ if (typeof module !== 'undefined' && module.exports) {
     var theme = chartTheme();
     scale.ticks = scale.ticks || {};
     scale.ticks.color = theme.text;
-    scale.grid = { color: theme.grid };
+    // 目盛り線(tick mark)はプラグイン側で内向きに描画するため、
+    // Chart.js標準の外向きtickは非表示にする(薄いグリッド線自体は維持)。
+    scale.grid = { color: theme.grid, drawTicks: false };
     scale.border = { color: theme.grid };
     if (scale.title) {
       scale.title.color = theme.text;
     }
     return scale;
   }
+
+  // X軸(下)・Y軸(左)の目盛り線をプロット領域の内側へ向けて描画する。
+  // 右軸・上軸は元々定義していないため対象外(現状どおり非表示)。
+  var inwardTicksPlugin = {
+    id: 'inwardTicks',
+    afterDraw: function (chart) {
+      var ctx = chart.ctx;
+      var area = chart.chartArea;
+      var theme = chartTheme();
+      var xScale = chart.scales.x;
+      var yScale = chart.scales.y;
+
+      // 薄いグリッド線と重なって見分けが付かなくなるのを避けるため、
+      // 目盛り線自体は軸の境界線と同じ、はっきりした色で描く。
+      ctx.save();
+      ctx.strokeStyle = theme.tooltipBorder;
+      ctx.lineWidth = 1;
+
+      if (xScale && xScale.position === 'bottom') {
+        (xScale.ticks || []).forEach(function (tick) {
+          var xPixel = xScale.getPixelForValue(tick.value);
+          if (xPixel < area.left - 0.5 || xPixel > area.right + 0.5) return;
+          ctx.beginPath();
+          ctx.moveTo(xPixel, area.bottom);
+          ctx.lineTo(xPixel, area.bottom - TICK_MARK_LENGTH);
+          ctx.stroke();
+        });
+      }
+
+      if (yScale && yScale.position === 'left') {
+        (yScale.ticks || []).forEach(function (tick) {
+          var yPixel = yScale.getPixelForValue(tick.value);
+          if (yPixel < area.top - 0.5 || yPixel > area.bottom + 0.5) return;
+          ctx.beginPath();
+          ctx.moveTo(area.left, yPixel);
+          ctx.lineTo(area.left + TICK_MARK_LENGTH, yPixel);
+          ctx.stroke();
+        });
+      }
+
+      ctx.restore();
+    }
+  };
+  Chart.register(inwardTicksPlugin);
 
   function themedPlugins(tooltipCallbacks) {
     var theme = chartTheme();
@@ -969,10 +1041,48 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
+  // 場所比較モード「1月始まり」表示: 今年の1/1〜12/31を軸範囲に固定する。
+  // データが存在しない未来分は描画されず空白のまま残る。
+  function getJanStartBounds() {
+    var year = new Date().getFullYear();
+    return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+  }
+
+  function isOddMonth(date) {
+    return (date.getMonth() + 1) % 2 === 1;
+  }
+
+  // 目盛り自体を奇数月のみに絞り込む(Chart.jsのautoSkipが偶数月側を
+  // 残してしまい、ラベルをコールバックで空文字にするだけでは狭い画面で
+  // 全ラベルが空欄になる場合があるため、生成段階で除外する)。
+  function keepOddMonthTicks(axis) {
+    axis.ticks = (axis.ticks || []).filter(function (tick) {
+      return isOddMonth(new Date(tick.value));
+    });
+  }
+
+  // 直近表示モードのX軸ラベル("yy/M"表記。奇数月のみが渡ってくる)
+  function rollingMonthTickLabel(value) {
+    var date = new Date(value);
+    return String(date.getFullYear()).slice(-2) + '/' + (date.getMonth() + 1);
+  }
+
+  // 1月始まりモード・年比較モードのX軸ラベル("M月"表記。奇数月のみが渡ってくる)
+  function monthOnlyTickLabel(value) {
+    var date = new Date(value);
+    return (date.getMonth() + 1) + '月';
+  }
+
+  // 直近表示モードのうち短期間(1ヶ月/3ヶ月/半年)は、月初ティック自体が
+  // 少なく奇数月フィルタを適用するとラベルが0件になり得るため対象外とする。
+  var SHORT_ROLLING_RANGES = ['1m', '3m', '6m'];
+
   function renderTimeseriesChart() {
     var canvas = document.getElementById('chart-timeseries');
-    var bounds = getRangeBounds(currentRange);
+    var isJanStart = currentTsDisplayMode === 'jan-start';
+    var bounds = isJanStart ? getJanStartBounds() : getRangeBounds(currentRange);
     var ids = checkedSeriesIds();
+    var isShortRolling = !isJanStart && SHORT_ROLLING_RANGES.indexOf(currentRange) !== -1;
 
     var datasets = loadedStations()
       .filter(function (s) {
@@ -986,11 +1096,18 @@ if (typeof module !== 'undefined' && module.exports) {
       type: 'time',
       time: {
         unit: 'month',
-        displayFormats: { month: 'yy/M' },
         tooltipFormat: 'yyyy/M/d'
+      },
+      ticks: {
+        maxRotation: 0,
+        minRotation: 0,
+        callback: isJanStart ? monthOnlyTickLabel : rollingMonthTickLabel
       },
       title: { display: true, text: '日付' }
     };
+    if (!isShortRolling) {
+      scalesX.afterBuildTicks = keepOddMonthTicks;
+    }
     if (bounds.start) {
       scalesX.min = bounds.start;
       scalesX.max = bounds.end;
@@ -1044,6 +1161,39 @@ if (typeof module !== 'undefined' && module.exports) {
         renderTimeseriesChart();
       });
     });
+  }
+
+  // 場所比較モードの表示形式(1月始まり/直近表示)に応じて、
+  // トグルボタンの見た目と表示期間ボタンの表示/非表示を切り替える。
+  function updateTsDisplayModeUI() {
+    var toggle = document.getElementById('ts-display-toggle');
+    var rangeButtons = document.getElementById('range-buttons');
+    if (!toggle || !rangeButtons) return;
+    var isJanStart = currentTsDisplayMode === 'jan-start';
+
+    toggle.querySelectorAll('.ts-display-btn').forEach(function (btn) {
+      var active = btn.dataset.displayMode === currentTsDisplayMode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+
+    rangeButtons.classList.toggle('is-hidden', isJanStart);
+  }
+
+  function initTsDisplayToggle() {
+    var toggle = document.getElementById('ts-display-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function (event) {
+      var button = event.target.closest('.ts-display-btn');
+      if (!button) return;
+      var mode = button.dataset.displayMode;
+      if (mode === currentTsDisplayMode) return;
+      currentTsDisplayMode = mode;
+      saveTsDisplayModePref(currentTsDisplayMode);
+      updateTsDisplayModeUI();
+      renderTimeseriesChart();
+    });
+    updateTsDisplayModeUI();
   }
 
   // ---- 年比較モード ----
@@ -1293,11 +1443,12 @@ if (typeof module !== 'undefined' && module.exports) {
             time: { unit: 'month' },
             min: new Date(2000, 0, 1),
             max: new Date(2000, 11, 31),
+            afterBuildTicks: keepOddMonthTicks,
             ticks: {
-              // ダミー年(2000)は表示せず「1月」〜「12月」の日本語表記にする
-              callback: function (value) {
-                return (new Date(value).getMonth() + 1) + '月';
-              }
+              // ダミー年(2000)は表示せず「1月」「3月」…奇数月のみ表示する
+              maxRotation: 0,
+              minRotation: 0,
+              callback: monthOnlyTickLabel
             },
             title: { display: true, text: '月日' }
           }),
@@ -1396,6 +1547,7 @@ if (typeof module !== 'undefined' && module.exports) {
     initReloadButton();
     cardsExpanded = loadCardsExpandedPref();
     initCardsToggle();
+    currentTsDisplayMode = loadTsDisplayModePref();
     window.addEventListener('resize', scheduleLatestCardNameSizing);
     window.addEventListener('resize', updateCardsCollapse);
     updateStatus('データ読み込み中...');
@@ -1427,6 +1579,7 @@ if (typeof module !== 'undefined' && module.exports) {
         initSeriesControls();
         buildYearlySelect();
         initRangeButtons();
+        initTsDisplayToggle();
         initTabs();
         renderTimeseriesChart();
       })

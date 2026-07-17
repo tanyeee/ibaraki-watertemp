@@ -614,6 +614,42 @@ main {
   flex: 1 1 100%;
 }
 
+.range-buttons.is-hidden {
+  display: none;
+}
+
+.ts-display-toggle {
+  display: inline-flex;
+  margin-bottom: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ts-display-btn {
+  padding: 8px 16px;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ts-display-btn + .ts-display-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.ts-display-btn:hover {
+  background: var(--color-control);
+}
+
+.ts-display-btn.active {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
 #yearly-add-button {
   min-height: 36px;
   background: var(--color-accent);
@@ -761,6 +797,14 @@ main {
   }
   .latest-cards {
     padding: 2px 0 6px;
+  }
+  .ts-display-toggle {
+    display: flex;
+    width: 100%;
+  }
+  .ts-display-btn {
+    flex: 1 1 0;
+    min-height: 40px;
   }
   .latest-cards-featured,
   .latest-cards-groups {
