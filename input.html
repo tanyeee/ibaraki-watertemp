@@ -37,6 +37,34 @@
       --color-focus-ring: rgba(86, 180, 233, 0.35);
     }
   }
+  /* 手動でテーマを選択した場合は、端末設定(prefers-color-scheme)より
+     こちらの明示指定を優先する。index.htmlでの選択(localStorage)に追従する。 */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --color-bg: #f5f7f9;
+    --color-surface: #ffffff;
+    --color-control: #f5f7f9;
+    --color-text: #222222;
+    --color-muted: #666666;
+    --color-border: #dde2e6;
+    --color-accent: #0072B2;
+    --color-accent-contrast: #ffffff;
+    --color-error: #c62828;
+    --color-focus-ring: rgba(0, 114, 178, 0.25);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-bg: #11161b;
+    --color-surface: #1b2229;
+    --color-control: #252e37;
+    --color-text: #edf1f5;
+    --color-muted: #aab4be;
+    --color-border: #3a4651;
+    --color-accent: #56B4E9;
+    --color-accent-contrast: #07141c;
+    --color-error: #ff8a80;
+    --color-focus-ring: rgba(86, 180, 233, 0.35);
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -161,6 +189,20 @@
     color: var(--color-error);
   }
 </style>
+<script>
+(function () {
+  // index.htmlで手動選択されたテーマ(watertemp_theme)があれば、このページでも追従する。
+  var THEME_STORAGE_KEY = "watertemp_theme";
+  try {
+    var stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") {
+      document.documentElement.setAttribute("data-theme", stored);
+    }
+  } catch (e) {
+    // localStorageが使えない環境では端末設定に委ねる
+  }
+})();
+</script>
 </head>
 <body>
 <main>

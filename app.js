@@ -410,6 +410,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var currentMode = 'timeseries';
   var currentRange = '1y';
   var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
+  var THEME_STORAGE_KEY = 'watertemp_theme';
   var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling'
   var TICK_MARK_LENGTH = 6;
   var showDormantStations = false;
@@ -1512,8 +1513,75 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
-  function updateThemeColors(event) {
-    isDarkMode = event.matches;
+  // ---- テーマ(ライト/ダーク)手動切替 ----
+
+  function getStoredTheme() {
+    var storage = getLocalStorage();
+    if (!storage) return null;
+    try {
+      var value = storage.getItem(THEME_STORAGE_KEY);
+      return (value === 'light' || value === 'dark') ? value : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setStoredTheme(theme) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (err) {
+      // localStorageが使えない環境では無視
+    }
+  }
+
+  // 手動選択があればそれを優先し、なければ端末設定(prefers-color-scheme)に従う
+  function currentDarkModePreference() {
+    var stored = getStoredTheme();
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+    return darkModeMedia.matches;
+  }
+
+  // data-theme属性は手動選択がある場合のみ付与し、無い場合はmedia queryに委ねる
+  function syncThemeAttribute() {
+    var stored = getStoredTheme();
+    if (stored) {
+      document.documentElement.setAttribute('data-theme', stored);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  function updateThemeToggleButton() {
+    var btn = document.getElementById('theme-toggle-button');
+    if (!btn) return;
+    if (isDarkMode) {
+      btn.textContent = '☀';
+      btn.setAttribute('aria-label', 'ライト表示に切り替え');
+      btn.setAttribute('title', 'ライト表示に切り替え');
+    } else {
+      btn.textContent = '🌙';
+      btn.setAttribute('aria-label', 'ダーク表示に切り替え');
+      btn.setAttribute('title', 'ダーク表示に切り替え');
+    }
+  }
+
+  function initThemeToggle() {
+    var btn = document.getElementById('theme-toggle-button');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var nextTheme = isDarkMode ? 'light' : 'dark';
+      setStoredTheme(nextTheme);
+      syncThemeAttribute();
+      refreshThemeColors();
+    });
+  }
+
+  function refreshThemeColors() {
+    isDarkMode = currentDarkModePreference();
+    updateThemeToggleButton();
     var colorById = assignColors(stationsConfig);
 
     stationsConfig.forEach(function (station) {
@@ -1545,6 +1613,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function init() {
     initReloadButton();
+    syncThemeAttribute();
+    isDarkMode = currentDarkModePreference();
+    initThemeToggle();
+    updateThemeToggleButton();
     cardsExpanded = loadCardsExpandedPref();
     initCardsToggle();
     currentTsDisplayMode = loadTsDisplayModePref();
@@ -1553,13 +1625,19 @@ if (typeof module !== 'undefined' && module.exports) {
     updateStatus('データ読み込み中...');
     loadAllData()
       .then(function () {
-        // 読み込み中に端末テーマが変わっていても、描画直前の設定を採用する
-        isDarkMode = darkModeMedia.matches;
+        // 読み込み中に端末テーマ(手動選択が無ければ端末設定)が変わっていても、描画直前の設定を採用する
+        isDarkMode = currentDarkModePreference();
+        updateThemeToggleButton();
         var colorById = assignColors(stationsConfig);
         stationsConfig.forEach(function (station) {
           seriesData[station.id].color = colorById[station.id];
         });
-        darkModeMedia.addEventListener('change', updateThemeColors);
+        darkModeMedia.addEventListener('change', function () {
+          // 手動選択(localStorage)がある場合は端末設定の変化を無視する
+          if (!getStoredTheme()) {
+            refreshThemeColors();
+          }
+        });
 
         var loaded = loadedStations().length;
         var total = stationsConfig.length;

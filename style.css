@@ -26,6 +26,34 @@
   }
 }
 
+/* 手動でテーマを選択した場合は、端末設定(prefers-color-scheme)より
+   こちらの明示指定を優先する。 */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f5f7f9;
+  --color-surface: #ffffff;
+  --color-control: #f5f7f9;
+  --color-text: #222222;
+  --color-muted: #666666;
+  --color-border: #dde2e6;
+  --color-accent: #0072B2;
+  --color-accent-contrast: #ffffff;
+  --color-focus-ring: rgba(0, 114, 178, 0.25);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #11161b;
+  --color-surface: #1b2229;
+  --color-control: #252e37;
+  --color-text: #edf1f5;
+  --color-muted: #aab4be;
+  --color-border: #3a4651;
+  --color-accent: #56B4E9;
+  --color-accent-contrast: #07141c;
+  --color-focus-ring: rgba(86, 180, 233, 0.35);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -123,6 +151,12 @@ a {
 .header-icon-button:focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
+}
+
+/* 水滴アイコンはライト/ダーク両テーマで目立たないよう常に黒にする */
+.water-drop-button {
+  color: #000000;
+  border-color: #000000;
 }
 
 .latest-cards {
