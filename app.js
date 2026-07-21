@@ -846,6 +846,8 @@ if (typeof module !== 'undefined' && module.exports) {
           majorMonths[tickDate.getFullYear() + '-' + tickDate.getMonth()] = true;
           var xPixel = xScale.getPixelForValue(tick.value);
           if (xPixel < area.left - 0.5 || xPixel > area.right + 0.5) return;
+          // 固定表示の右端は縦軸線で閉じるため、重なる内向き目盛りは描かない。
+          if (Math.abs(xPixel - area.right) < 0.5) return;
           ctx.beginPath();
           ctx.moveTo(xPixel, area.bottom);
           ctx.lineTo(xPixel, area.bottom - TICK_MARK_LENGTH);
@@ -1605,8 +1607,12 @@ if (typeof module !== 'undefined' && module.exports) {
   function keepCalendarMonthTicks(axis) {
     axis.ticks = (axis.ticks || []).filter(function (tick) {
       var month = new Date(tick.value).getMonth();
-      return (month - currentCalendarStartMonth + 12) % 2 === 0;
+      // 12月の月初目盛りは右端より手前になるため、終端目盛りへ置き換える。
+      return month !== 11 && (month - currentCalendarStartMonth + 12) % 2 === 0;
     });
+    if (!axis.ticks.some(function (tick) { return tick.value === axis.max; })) {
+      axis.ticks.push({ value: axis.max });
+    }
   }
 
   // 直近表示モードのX軸ラベル("yy/M"表記。奇数月のみが渡ってくる)
@@ -1700,6 +1706,7 @@ if (typeof module !== 'undefined' && module.exports) {
       ticks: {
         maxRotation: 0,
         minRotation: 0,
+        align: isCalendarStart ? 'inner' : 'center',
         callback: isCalendarStart ? monthOnlyTickLabel : rollingMonthTickLabel
       },
       title: { display: true, text: '日付' }
