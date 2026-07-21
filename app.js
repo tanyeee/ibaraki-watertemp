@@ -1527,39 +1527,18 @@ if (typeof module !== 'undefined' && module.exports) {
         seriesName: station.name
       };
     });
-    if (currentTsPlotStyle === 'standard') {
-      points = withTimeseriesGapBreaks(points);
-    }
     var showLine = currentTsPlotStyle === 'standard';
     return {
       label: station.name,
       data: points,
       showLine: showLine,
-      spanGaps: false,
+      spanGaps: showLine,
       borderWidth: showLine ? 1.5 : 0,
-      pointRadius: narrowScreenMedia.matches ? 0.5 : 2,
+      pointRadius: showLine ? (narrowScreenMedia.matches ? 0.25 : 1) : (narrowScreenMedia.matches ? 0.5 : 2),
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
     };
-  }
-
-  // 日付が1日を超えて飛ぶ箇所にnullを挿入し、欠測を線でまたがない。
-  function withTimeseriesGapBreaks(points) {
-    if (!points.length) return points;
-    var result = [points[0]];
-    for (var i = 1; i < points.length; i++) {
-      var prevDate = points[i - 1].x;
-      var curDate = points[i].x;
-      if (Math.round((curDate.getTime() - prevDate.getTime()) / 86400000) > 1) {
-        result.push({
-          x: new Date(prevDate.getTime() + (curDate.getTime() - prevDate.getTime()) / 2),
-          y: null
-        });
-      }
-      result.push(points[i]);
-    }
-    return result;
   }
 
   // 場所比較モード「1月始まり」表示: 今年の1/1〜12/31を軸範囲に固定する。
