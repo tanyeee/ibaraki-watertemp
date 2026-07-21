@@ -959,9 +959,15 @@ main {
   cursor: pointer;
 }
 
+.ts-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
 .ts-display-toggle {
   display: inline-flex;
-  margin-bottom: 12px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   overflow: hidden;
@@ -1237,7 +1243,7 @@ main {
   }
   .ts-display-toggle {
     display: flex;
-    width: 100%;
+    flex: 1 1 auto;
   }
   .ts-display-btn {
     flex: 1 1 0;

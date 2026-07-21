@@ -67,9 +67,15 @@
   </nav>
 
   <section id="panel-timeseries" class="panel" role="tabpanel" aria-labelledby="tab-timeseries">
-    <div class="ts-display-toggle" id="ts-display-toggle" role="group" aria-label="表示形式">
-      <button type="button" class="ts-display-btn active" data-display-mode="jan-start" aria-pressed="true">1月始まり</button>
-      <button type="button" class="ts-display-btn" data-display-mode="rolling" aria-pressed="false">直近表示</button>
+    <div class="ts-toggle-row">
+      <div class="ts-display-toggle" id="ts-display-toggle" role="group" aria-label="表示形式">
+        <button type="button" class="ts-display-btn active" data-display-mode="jan-start" aria-pressed="true">1月始まり</button>
+        <button type="button" class="ts-display-btn" data-display-mode="rolling" aria-pressed="false">直近表示</button>
+      </div>
+      <div class="ts-display-toggle" id="ts-plot-style-toggle" role="group" aria-label="描画スタイル">
+        <button type="button" class="ts-display-btn active" data-plot-style="standard" aria-pressed="true">標準</button>
+        <button type="button" class="ts-display-btn" data-plot-style="dots" aria-pressed="false">ドットのみ</button>
+      </div>
     </div>
     <div class="chart-wrap chart-wrap-timeseries">
       <div class="ts-chart-toolbar" id="ts-chart-toolbar">

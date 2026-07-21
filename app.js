@@ -622,8 +622,10 @@ if (typeof module !== 'undefined' && module.exports) {
   var currentMode = 'timeseries';
   var currentRange = '1y';
   var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
+  var TS_PLOT_STYLE_STORAGE_KEY = 'watertemp_ts_plot_style';
   var THEME_STORAGE_KEY = 'watertemp_theme';
   var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling'
+  var currentTsPlotStyle = 'standard'; // 'standard' | 'dots'
   var TICK_MARK_LENGTH = 6;
   var showDormantStations = false;
   var tsChart = null;
@@ -743,6 +745,27 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!storage) return;
     try {
       storage.setItem(TS_DISPLAY_MODE_STORAGE_KEY, mode);
+    } catch (err) {
+      // 保存領域が使えない環境では黙って無視する
+    }
+  }
+
+  // 場所比較モードの描画スタイル。未保存/破損時は線+ドットを既定とする。
+  function loadTsPlotStylePref() {
+    var storage = getLocalStorage();
+    if (!storage) return 'standard';
+    try {
+      return storage.getItem(TS_PLOT_STYLE_STORAGE_KEY) === 'dots' ? 'dots' : 'standard';
+    } catch (err) {
+      return 'standard';
+    }
+  }
+
+  function saveTsPlotStylePref(style) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(TS_PLOT_STYLE_STORAGE_KEY, style);
     } catch (err) {
       // 保存領域が使えない環境では黙って無視する
     }
@@ -1504,15 +1527,39 @@ if (typeof module !== 'undefined' && module.exports) {
         seriesName: station.name
       };
     });
+    if (currentTsPlotStyle === 'standard') {
+      points = withTimeseriesGapBreaks(points);
+    }
+    var showLine = currentTsPlotStyle === 'standard';
     return {
       label: station.name,
       data: points,
-      showLine: false,
+      showLine: showLine,
+      spanGaps: false,
+      borderWidth: showLine ? 1.5 : 0,
       pointRadius: narrowScreenMedia.matches ? 0.5 : 2,
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
     };
+  }
+
+  // 日付が1日を超えて飛ぶ箇所にnullを挿入し、欠測を線でまたがない。
+  function withTimeseriesGapBreaks(points) {
+    if (!points.length) return points;
+    var result = [points[0]];
+    for (var i = 1; i < points.length; i++) {
+      var prevDate = points[i - 1].x;
+      var curDate = points[i].x;
+      if (Math.round((curDate.getTime() - prevDate.getTime()) / 86400000) > 1) {
+        result.push({
+          x: new Date(prevDate.getTime() + (curDate.getTime() - prevDate.getTime()) / 2),
+          y: null
+        });
+      }
+      result.push(points[i]);
+    }
+    return result;
   }
 
   // 場所比較モード「1月始まり」表示: 今年の1/1〜12/31を軸範囲に固定する。
@@ -1761,6 +1808,30 @@ if (typeof module !== 'undefined' && module.exports) {
       renderTimeseriesChart();
     });
     updateTsDisplayModeUI();
+  }
+
+  function updateTsPlotStyleUI() {
+    var toggle = document.getElementById('ts-plot-style-toggle');
+    if (!toggle) return;
+    toggle.querySelectorAll('.ts-display-btn').forEach(function (btn) {
+      var active = btn.dataset.plotStyle === currentTsPlotStyle;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function initTsPlotStyleToggle() {
+    var toggle = document.getElementById('ts-plot-style-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function (event) {
+      var button = event.target.closest('.ts-display-btn');
+      if (!button || button.dataset.plotStyle === currentTsPlotStyle) return;
+      currentTsPlotStyle = button.dataset.plotStyle;
+      saveTsPlotStylePref(currentTsPlotStyle);
+      updateTsPlotStyleUI();
+      renderTimeseriesChart();
+    });
+    updateTsPlotStyleUI();
   }
 
   // ---- 年比較モード ----
@@ -2339,6 +2410,7 @@ if (typeof module !== 'undefined' && module.exports) {
     cardsExpanded = loadCardsExpandedPref();
     initCardsToggle();
     currentTsDisplayMode = loadTsDisplayModePref();
+    currentTsPlotStyle = loadTsPlotStylePref();
     initTsZoomResetButton();
     window.addEventListener('resize', scheduleLatestCardNameSizing);
     window.addEventListener('resize', updateCardsCollapse);
@@ -2380,6 +2452,7 @@ if (typeof module !== 'undefined' && module.exports) {
         buildYearlySelect();
         initRangeButtons();
         initTsDisplayToggle();
+        initTsPlotStyleToggle();
         initTabs();
         renderTimeseriesChart();
       })
