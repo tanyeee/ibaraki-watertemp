@@ -389,6 +389,75 @@ var ColorAssignmentLogic = (function () {
   };
 })();
 
+// 地点ごとのユーザー指定色を安全に正規化し、localStorageへ保存する。
+// DOMに依存させず、破損データや廃止地点IDをNodeテストでも検証可能にする。
+var SeriesColorPreferenceLogic = (function () {
+  'use strict';
+
+  var STORAGE_KEY = 'watertemp_series_colors_v1';
+  var HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
+
+  function normalizeColor(value) {
+    var color = String(value || '').toUpperCase();
+    return HEX_COLOR_PATTERN.test(color) ? color : null;
+  }
+
+  function normalizeMap(value, validIds) {
+    var normalized = {};
+    var allowed = {};
+    (validIds || []).forEach(function (id) { allowed[id] = true; });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return normalized;
+    Object.keys(value).forEach(function (id) {
+      var color = normalizeColor(value[id]);
+      if (allowed[id] && color) normalized[id] = color;
+    });
+    return normalized;
+  }
+
+  function load(storage, validIds) {
+    if (!storage) return {};
+    try {
+      return normalizeMap(JSON.parse(storage.getItem(STORAGE_KEY)), validIds);
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function save(storage, colorMap) {
+    if (!storage) return;
+    try {
+      var keys = Object.keys(colorMap || {});
+      if (!keys.length && typeof storage.removeItem === 'function') {
+        storage.removeItem(STORAGE_KEY);
+      } else {
+        storage.setItem(STORAGE_KEY, JSON.stringify(colorMap || {}));
+      }
+    } catch (err) {
+      // 保存領域が使えない環境では現在のページ内だけで反映する
+    }
+  }
+
+  function applyOverrides(defaultColors, customColors) {
+    var result = Object.assign({}, defaultColors || {});
+    Object.keys(customColors || {}).forEach(function (id) {
+      var color = normalizeColor(customColors[id]);
+      if (Object.prototype.hasOwnProperty.call(result, id) && color) {
+        result[id] = color;
+      }
+    });
+    return result;
+  }
+
+  return {
+    STORAGE_KEY: STORAGE_KEY,
+    normalizeColor: normalizeColor,
+    normalizeMap: normalizeMap,
+    load: load,
+    save: save,
+    applyOverrides: applyOverrides
+  };
+})();
+
 // 最新値カードの文字色を系列色から作り、背景とのコントラストを保証する。
 // DOMに依存させず、Nodeでも全系列を検証可能にする。
 var CardTextColorLogic = (function () {
@@ -588,6 +657,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
   module.exports.DateRangeLogic = DateRangeLogic;
   module.exports.ColorAssignmentLogic = ColorAssignmentLogic;
+  module.exports.SeriesColorPreferenceLogic = SeriesColorPreferenceLogic;
   module.exports.CardTextColorLogic = CardTextColorLogic;
   module.exports.NormalBandLogic = NormalBandLogic;
   module.exports.CardLayoutLogic = CardLayoutLogic;
@@ -639,6 +709,24 @@ if (typeof module !== 'undefined' && module.exports) {
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
   var latestCardResizeFrame = null;
+  var customSeriesColors = {};
+  var editingSeriesColorId = null;
+  var pendingSeriesColor = null;
+  var seriesColorDialogTrigger = null;
+  var SERIES_COLOR_PRESETS = [
+    { name: 'ブルー', color: '#2F8FC2' },
+    { name: '濃いブルー', color: '#3B82C4' },
+    { name: 'グリーン', color: '#008F72' },
+    { name: '明るいグリーン', color: '#3D9C56' },
+    { name: 'イエロー', color: '#BA7E00' },
+    { name: 'オレンジ', color: '#D66A1F' },
+    { name: 'レッド', color: '#D64B55' },
+    { name: 'ピンク', color: '#B45C94' },
+    { name: 'パープル', color: '#8F6BC0' },
+    { name: 'グレー', color: '#6F8190' },
+    { name: 'ターコイズ', color: '#00A6A6' },
+    { name: 'ブラウン', color: '#A06B35' }
+  ];
   var CARDS_EXPANDED_STORAGE_KEY = 'watertemp_cards_expanded';
   // 折りたたみ時に表示する最新値カード(3枚×2行、この順で表示)
   var DEFAULT_FEATURED_CARD_IDS = [
@@ -789,6 +877,19 @@ if (typeof module !== 'undefined' && module.exports) {
   // 系列一覧から group ごとのパレットで色を割り当てる
   function assignColors(list) {
     return ColorAssignmentLogic.assignColors(list, isDarkMode);
+  }
+
+  function resolvedSeriesColors(list) {
+    return SeriesColorPreferenceLogic.applyOverrides(assignColors(list), customSeriesColors);
+  }
+
+  function applyResolvedSeriesColors() {
+    var colorById = resolvedSeriesColors(stationsConfig);
+    stationsConfig.forEach(function (station) {
+      if (seriesData[station.id]) {
+        seriesData[station.id].color = colorById[station.id];
+      }
+    });
   }
 
   function chartTheme() {
@@ -1037,7 +1138,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function loadAllData() {
     return loadStationsConfig().then(function (list) {
-      var colorById = assignColors(list);
+      customSeriesColors = SeriesColorPreferenceLogic.load(
+        getLocalStorage(),
+        list.map(function (station) { return station.id; })
+      );
+      var colorById = resolvedSeriesColors(list);
       var tasks = list.map(function (station) {
         return loadSeriesJson(station).then(function () {
           seriesData[station.id].color = colorById[station.id];
@@ -1365,6 +1470,154 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
+  function stationById(seriesId) {
+    return stationsConfig.filter(function (station) { return station.id === seriesId; })[0] || null;
+  }
+
+  function hasCustomSeriesColor(seriesId) {
+    return Object.prototype.hasOwnProperty.call(customSeriesColors, seriesId);
+  }
+
+  function updateSeriesColorResetAllButton() {
+    var button = document.getElementById('series-colors-reset-all');
+    if (button) button.disabled = Object.keys(customSeriesColors).length === 0;
+  }
+
+  function updateSeriesColorControls() {
+    document.querySelectorAll('#series-checkboxes .series-checkbox[data-series-id]').forEach(function (row) {
+      var entry = seriesData[row.dataset.seriesId];
+      if (!entry || !entry.color) return;
+      var swatch = row.querySelector('.swatch');
+      var buttonSwatch = row.querySelector('.series-color-button-swatch');
+      if (swatch) swatch.style.background = entry.color;
+      if (buttonSwatch) buttonSwatch.style.background = entry.color;
+    });
+    updateSeriesColorResetAllButton();
+  }
+
+  function refreshSeriesColorViews() {
+    applyResolvedSeriesColors();
+    renderLatestCards();
+    updateSeriesColorControls();
+    if (tsChart) renderTimeseriesChart();
+  }
+
+  function saveCustomSeriesColors() {
+    SeriesColorPreferenceLogic.save(getLocalStorage(), customSeriesColors);
+  }
+
+  function setCustomSeriesColor(seriesId, color) {
+    var normalized = SeriesColorPreferenceLogic.normalizeColor(color);
+    if (!stationById(seriesId) || !normalized) return;
+    customSeriesColors = Object.assign({}, customSeriesColors);
+    customSeriesColors[seriesId] = normalized;
+    saveCustomSeriesColors();
+    refreshSeriesColorViews();
+  }
+
+  function resetCustomSeriesColor(seriesId) {
+    if (!hasCustomSeriesColor(seriesId)) return;
+    customSeriesColors = Object.assign({}, customSeriesColors);
+    delete customSeriesColors[seriesId];
+    saveCustomSeriesColors();
+    refreshSeriesColorViews();
+  }
+
+  function resetAllCustomSeriesColors() {
+    if (!Object.keys(customSeriesColors).length) return;
+    customSeriesColors = {};
+    saveCustomSeriesColors();
+    refreshSeriesColorViews();
+  }
+
+  function syncSeriesColorDialog() {
+    var station = stationById(editingSeriesColorId);
+    var stationLabel = document.getElementById('series-color-station');
+    var customInput = document.getElementById('series-color-custom-input');
+    var resetButton = document.getElementById('series-color-reset');
+    if (!station || !pendingSeriesColor) return;
+    if (stationLabel) stationLabel.textContent = station.name;
+    if (customInput) customInput.value = pendingSeriesColor.toLowerCase();
+    if (resetButton) resetButton.disabled = !hasCustomSeriesColor(editingSeriesColorId);
+    document.querySelectorAll('#series-color-presets button[data-color]').forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.color === pendingSeriesColor));
+    });
+  }
+
+  function openSeriesColorDialog(seriesId, trigger) {
+    var dialog = document.getElementById('series-color-dialog');
+    var entry = seriesData[seriesId];
+    if (!dialog || !entry || !entry.color) return;
+    editingSeriesColorId = seriesId;
+    pendingSeriesColor = hasCustomSeriesColor(seriesId)
+      ? customSeriesColors[seriesId]
+      : entry.color.toUpperCase();
+    seriesColorDialogTrigger = trigger || null;
+    syncSeriesColorDialog();
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+  }
+
+  function initSeriesColorControls() {
+    var dialog = document.getElementById('series-color-dialog');
+    var form = document.getElementById('series-color-form');
+    var presets = document.getElementById('series-color-presets');
+    var customInput = document.getElementById('series-color-custom-input');
+    var closeButton = document.getElementById('series-color-close');
+    var cancelButton = document.getElementById('series-color-cancel');
+    var resetButton = document.getElementById('series-color-reset');
+    var resetAllButton = document.getElementById('series-colors-reset-all');
+    if (!dialog || !form || !presets || !customInput) return;
+
+    presets.innerHTML = '';
+    SERIES_COLOR_PRESETS.forEach(function (preset) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'series-color-preset';
+      button.dataset.color = preset.color;
+      button.setAttribute('aria-label', preset.name + 'を選ぶ');
+      button.setAttribute('aria-pressed', 'false');
+      var swatch = document.createElement('span');
+      swatch.className = 'series-color-preset-swatch';
+      swatch.style.background = preset.color;
+      button.appendChild(swatch);
+      button.addEventListener('click', function () {
+        pendingSeriesColor = preset.color;
+        syncSeriesColorDialog();
+      });
+      presets.appendChild(button);
+    });
+
+    customInput.addEventListener('input', function () {
+      pendingSeriesColor = customInput.value.toUpperCase();
+      syncSeriesColorDialog();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (editingSeriesColorId && pendingSeriesColor) {
+        setCustomSeriesColor(editingSeriesColorId, pendingSeriesColor);
+      }
+      closeCardCustomizer(dialog);
+    });
+    resetButton.addEventListener('click', function () {
+      if (editingSeriesColorId) resetCustomSeriesColor(editingSeriesColorId);
+      closeCardCustomizer(dialog);
+    });
+    closeButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
+    cancelButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
+    dialog.addEventListener('close', function () {
+      editingSeriesColorId = null;
+      pendingSeriesColor = null;
+      if (seriesColorDialogTrigger) seriesColorDialogTrigger.focus();
+      seriesColorDialogTrigger = null;
+    });
+    resetAllButton.addEventListener('click', resetAllCustomSeriesColors);
+    updateSeriesColorResetAllButton();
+  }
+
   function buildSeriesCheckboxes(selectedIds) {
     var container = document.getElementById('series-checkboxes');
     container.innerHTML = '';
@@ -1408,8 +1661,11 @@ if (typeof module !== 'undefined' && module.exports) {
       group.series.forEach(function (station) {
         var entry = seriesData[station.id];
         var available = !!(entry && entry.loaded);
+        var row = document.createElement('div');
+        row.className = 'series-checkbox' + (available ? '' : ' unavailable');
+        row.dataset.seriesId = station.id;
         var label = document.createElement('label');
-        label.className = 'series-checkbox' + (available ? '' : ' unavailable');
+        label.className = 'series-checkbox-main';
 
         var checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -1441,7 +1697,23 @@ if (typeof module !== 'undefined' && module.exports) {
           dormantStatus.textContent = '休止中(最終: ' + entry.meta.dataset_end + ')';
           label.appendChild(dormantStatus);
         }
-        list.appendChild(label);
+
+        var colorButton = document.createElement('button');
+        colorButton.type = 'button';
+        colorButton.className = 'series-color-button';
+        colorButton.setAttribute('aria-label', station.name + 'の色を変更');
+        colorButton.setAttribute('title', station.name + 'の色を変更');
+        var colorButtonSwatch = document.createElement('span');
+        colorButtonSwatch.className = 'series-color-button-swatch';
+        colorButtonSwatch.style.background = entry.color;
+        colorButton.appendChild(colorButtonSwatch);
+        colorButton.addEventListener('click', function () {
+          openSeriesColorDialog(station.id, colorButton);
+        });
+
+        row.appendChild(label);
+        row.appendChild(colorButton);
+        list.appendChild(row);
       });
       details.appendChild(list);
       container.appendChild(details);
@@ -2421,22 +2693,11 @@ if (typeof module !== 'undefined' && module.exports) {
   function refreshThemeColors() {
     isDarkMode = currentDarkModePreference();
     updateThemeToggleButton();
-    var colorById = assignColors(stationsConfig);
-
-    stationsConfig.forEach(function (station) {
-      if (seriesData[station.id]) {
-        seriesData[station.id].color = colorById[station.id];
-      }
-    });
+    applyResolvedSeriesColors();
 
     if (stationsConfig.length) {
       renderLatestCards();
-      document.querySelectorAll('#series-checkboxes input[data-series-id]').forEach(function (checkbox) {
-        var swatch = checkbox.parentElement.querySelector('.swatch');
-        if (swatch && seriesData[checkbox.dataset.seriesId]) {
-          swatch.style.background = seriesData[checkbox.dataset.seriesId].color;
-        }
-      });
+      updateSeriesColorControls();
     }
     if (tsChart) {
       renderTimeseriesChart();
@@ -2469,10 +2730,7 @@ if (typeof module !== 'undefined' && module.exports) {
         // 読み込み中に端末テーマ(手動選択が無ければ端末設定)が変わっていても、描画直前の設定を採用する
         isDarkMode = currentDarkModePreference();
         updateThemeToggleButton();
-        var colorById = assignColors(stationsConfig);
-        stationsConfig.forEach(function (station) {
-          seriesData[station.id].color = colorById[station.id];
-        });
+        applyResolvedSeriesColors();
         darkModeMedia.addEventListener('change', function () {
           // 手動選択(localStorage)がある場合は端末設定の変化を無視する
           if (!getStoredTheme()) {
@@ -2498,6 +2756,7 @@ if (typeof module !== 'undefined' && module.exports) {
         );
         buildSeriesCheckboxes(restoredSelectedIds);
         initSeriesControls();
+        initSeriesColorControls();
         buildYearlySelect();
         initRangeButtons();
         initCalendarStartButtons();

@@ -514,6 +514,93 @@ a {
   color: var(--color-accent-contrast);
 }
 
+.series-color-dialog {
+  width: min(460px, calc(100vw - 24px));
+}
+
+.series-color-station {
+  margin: 10px 0 0;
+  font-weight: 700;
+}
+
+.series-color-presets-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.series-color-presets-fieldset legend {
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.series-color-presets {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.series-color-preset {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.series-color-preset:hover,
+.series-color-preset[aria-pressed="true"] {
+  border-color: var(--color-border);
+  background: var(--color-control);
+}
+
+.series-color-preset[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.series-color-preset-swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+}
+
+.series-color-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-control);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.series-color-custom input[type="color"] {
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.series-color-contrast-note {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
 main {
   flex: 1 0 auto;
   width: 100%;
@@ -556,7 +643,10 @@ main {
 .dormant-series-toggle input:focus-visible,
 .series-group-summary:focus-visible,
 .series-group-toggle input:focus-visible,
-.series-checkbox input:focus-visible {
+.series-checkbox input:focus-visible,
+.series-color-button:focus-visible,
+.series-color-toolbar button:focus-visible,
+.series-color-custom input:focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -840,6 +930,35 @@ main {
   border-top: 1px solid var(--color-border);
 }
 
+.series-color-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  gap: 12px;
+  padding: 4px 2px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.series-color-toolbar button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.series-color-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .control-group {
   display: flex;
   flex-wrap: wrap;
@@ -851,12 +970,22 @@ main {
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 42px;
+  min-height: 46px;
   font-size: 0.85rem;
-  padding: 4px 8px;
+  padding: 1px 8px;
   border-radius: 4px;
   background: var(--color-control);
   color: var(--color-text);
+}
+
+.series-checkbox-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  gap: 7px;
+  cursor: pointer;
 }
 
 .series-checkbox:first-child {
@@ -865,6 +994,9 @@ main {
 
 .series-checkbox.unavailable {
   color: var(--color-muted);
+}
+
+.series-checkbox.unavailable .series-checkbox-main {
   cursor: not-allowed;
 }
 
@@ -898,6 +1030,32 @@ main {
   height: 10px;
   border-radius: 50%;
   display: inline-block;
+}
+
+.series-color-button {
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 -7px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.series-color-button:hover {
+  background: var(--color-surface);
+}
+
+.series-color-button-swatch {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
 }
 
 .range-buttons button,
@@ -1283,6 +1441,13 @@ main {
   }
   .card-customizer form {
     padding: 14px;
+  }
+  #series-color-reset {
+    flex-basis: 100%;
+  }
+  #series-color-cancel,
+  .series-color-dialog .card-customizer-save {
+    flex: 1 1 0;
   }
   .card-customizer-slots {
     gap: 7px 5px;

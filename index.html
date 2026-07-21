@@ -65,6 +65,32 @@
   </form>
 </dialog>
 
+<dialog id="series-color-dialog" class="card-customizer series-color-dialog" aria-labelledby="series-color-title" aria-describedby="series-color-help">
+  <form id="series-color-form" method="dialog">
+    <div class="card-customizer-header">
+      <h2 id="series-color-title">地点カラー</h2>
+      <button type="button" id="series-color-close" class="card-customizer-close" aria-label="カラー設定を閉じる">×</button>
+    </div>
+    <p class="series-color-station" id="series-color-station"></p>
+    <p id="series-color-help" class="card-customizer-help">プリセットを選ぶか、端末のカラーピッカーから自由な色を指定できます。</p>
+    <fieldset class="series-color-presets-fieldset">
+      <legend>プリセットカラー</legend>
+      <div id="series-color-presets" class="series-color-presets"></div>
+    </fieldset>
+    <label class="series-color-custom">
+      <span>自由に選ぶ</span>
+      <input type="color" id="series-color-custom-input" value="#2F8FC2">
+    </label>
+    <p class="series-color-contrast-note">自由に選んだ色は、テーマによって見えにくくなる場合があります。</p>
+    <div class="card-customizer-footer">
+      <button type="button" id="series-color-reset" class="card-customizer-secondary">この地点を初期色に戻す</button>
+      <span class="card-customizer-footer-spacer"></span>
+      <button type="button" id="series-color-cancel" class="card-customizer-secondary">キャンセル</button>
+      <button type="submit" class="card-customizer-save">適用</button>
+    </div>
+  </form>
+</dialog>
+
 <main>
   <nav class="tabs" role="tablist">
     <button class="tab-btn active" id="tab-timeseries" role="tab" aria-selected="true" aria-controls="panel-timeseries" data-mode="timeseries">場所比較モード</button>
@@ -111,6 +137,10 @@
             <input type="checkbox" id="show-dormant-series">
             <span>休止中の地点も表示</span>
           </label>
+          <div class="series-color-toolbar">
+            <span>地点カラー</span>
+            <button type="button" id="series-colors-reset-all" disabled>すべて初期色に戻す</button>
+          </div>
           <div class="series-groups" id="series-checkboxes">
             <!-- groupごとの系列チェックボックスはJSで生成 -->
           </div>
