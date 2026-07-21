@@ -621,6 +621,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var seriesData = {};             // id -> { config, meta, records, color, loaded, error }
   var currentMode = 'timeseries';
   var currentRange = '1y';
+  var currentCalendarStartMonth = 0; // 0: 1月 | 3: 4月
   var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
   var TS_PLOT_STYLE_STORAGE_KEY = 'watertemp_ts_plot_style';
   var THEME_STORAGE_KEY = 'watertemp_theme';
@@ -1541,11 +1542,18 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
-  // 場所比較モード「1月始まり」表示: 今年の1/1〜12/31を軸範囲に固定する。
-  // データが存在しない未来分は描画されず空白のまま残る。
-  function getJanStartBounds() {
-    var year = new Date().getFullYear();
-    return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+  // 場所比較モードの固定期間表示。選択した開始月を含む12ヶ月間に軸を固定する。
+  // 4月始まりを1〜3月に開いた場合は、前年4月〜当年3月を表示する。
+  function getCalendarStartBounds() {
+    var now = new Date();
+    var startYear = now.getFullYear();
+    if (now.getMonth() < currentCalendarStartMonth) {
+      startYear -= 1;
+    }
+    return {
+      start: new Date(startYear, currentCalendarStartMonth, 1),
+      end: new Date(startYear + 1, currentCalendarStartMonth, 0)
+    };
   }
 
   function isOddMonth(date) {
@@ -1561,13 +1569,22 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
+  // 固定期間表示では開始月から2ヶ月おきに目盛りを残し、
+  // 4月始まりでも先頭の「4月」が省略されないようにする。
+  function keepCalendarMonthTicks(axis) {
+    axis.ticks = (axis.ticks || []).filter(function (tick) {
+      var month = new Date(tick.value).getMonth();
+      return (month - currentCalendarStartMonth + 12) % 2 === 0;
+    });
+  }
+
   // 直近表示モードのX軸ラベル("yy/M"表記。奇数月のみが渡ってくる)
   function rollingMonthTickLabel(value) {
     var date = new Date(value);
     return String(date.getFullYear()).slice(-2) + '/' + (date.getMonth() + 1);
   }
 
-  // 1月始まりモード・年比較モードのX軸ラベル("M月"表記。奇数月のみが渡ってくる)
+  // 固定期間表示・年比較モードのX軸ラベル("M月"表記)
   function monthOnlyTickLabel(value) {
     var date = new Date(value);
     return (date.getMonth() + 1) + '月';
@@ -1630,10 +1647,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function renderTimeseriesChart() {
     var canvas = document.getElementById('chart-timeseries');
-    var isJanStart = currentTsDisplayMode === 'jan-start';
-    var bounds = isJanStart ? getJanStartBounds() : getRangeBounds(currentRange);
+    var isCalendarStart = currentTsDisplayMode === 'jan-start';
+    var bounds = isCalendarStart ? getCalendarStartBounds() : getRangeBounds(currentRange);
     var ids = checkedSeriesIds();
-    var isShortRolling = !isJanStart && SHORT_ROLLING_RANGES.indexOf(currentRange) !== -1;
+    var isShortRolling = !isCalendarStart && SHORT_ROLLING_RANGES.indexOf(currentRange) !== -1;
 
     var datasets = loadedStations()
       .filter(function (s) {
@@ -1652,11 +1669,13 @@ if (typeof module !== 'undefined' && module.exports) {
       ticks: {
         maxRotation: 0,
         minRotation: 0,
-        callback: isJanStart ? monthOnlyTickLabel : rollingMonthTickLabel
+        callback: isCalendarStart ? monthOnlyTickLabel : rollingMonthTickLabel
       },
       title: { display: true, text: '日付' }
     };
-    if (!isShortRolling) {
+    if (isCalendarStart) {
+      scalesX.afterBuildTicks = keepCalendarMonthTicks;
+    } else if (!isShortRolling) {
       scalesX.afterBuildTicks = keepOddMonthTicks;
     }
     if (bounds.start) {
@@ -1756,13 +1775,27 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
+  function initCalendarStartButtons() {
+    var buttons = document.querySelectorAll('#calendar-start-buttons button[data-start-month]');
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var startMonth = Number(btn.dataset.startMonth);
+        if ((startMonth !== 0 && startMonth !== 3) || startMonth === currentCalendarStartMonth) return;
+        currentCalendarStartMonth = startMonth;
+        updateTsDisplayModeUI();
+        renderTimeseriesChart();
+      });
+    });
+  }
+
   // 場所比較モードの表示形式(1月始まり/直近表示)に応じて、
   // トグルボタンの見た目と表示期間ボタンの表示/非表示を切り替える。
   function updateTsDisplayModeUI() {
     var toggle = document.getElementById('ts-display-toggle');
     var rangeButtons = document.getElementById('range-buttons');
-    if (!toggle || !rangeButtons) return;
-    var isJanStart = currentTsDisplayMode === 'jan-start';
+    var calendarStartButtons = document.getElementById('calendar-start-buttons');
+    if (!toggle || !rangeButtons || !calendarStartButtons) return;
+    var isCalendarStart = currentTsDisplayMode === 'jan-start';
 
     toggle.querySelectorAll('.ts-display-btn').forEach(function (btn) {
       var active = btn.dataset.displayMode === currentTsDisplayMode;
@@ -1770,7 +1803,13 @@ if (typeof module !== 'undefined' && module.exports) {
       btn.setAttribute('aria-pressed', String(active));
     });
 
-    rangeButtons.classList.toggle('is-hidden', isJanStart);
+    rangeButtons.classList.toggle('is-hidden', isCalendarStart);
+    calendarStartButtons.classList.toggle('is-hidden', !isCalendarStart);
+    calendarStartButtons.querySelectorAll('button[data-start-month]').forEach(function (btn) {
+      var active = Number(btn.dataset.startMonth) === currentCalendarStartMonth;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
   }
 
   function initTsDisplayToggle() {
@@ -2430,6 +2469,7 @@ if (typeof module !== 'undefined' && module.exports) {
         initSeriesControls();
         buildYearlySelect();
         initRangeButtons();
+        initCalendarStartButtons();
         initTsDisplayToggle();
         initTsPlotStyleToggle();
         initTabs();
