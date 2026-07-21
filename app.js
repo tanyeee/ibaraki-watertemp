@@ -628,6 +628,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling'
   var currentTsPlotStyle = 'standard'; // 'standard' | 'dots'
   var TICK_MARK_LENGTH = 6;
+  var MINOR_TICK_MARK_LENGTH = 3;
   var showDormantStations = false;
   var tsChart = null;
   var yearlyChart = null;
@@ -821,8 +822,8 @@ if (typeof module !== 'undefined' && module.exports) {
     return scale;
   }
 
-  // X軸(下)・Y軸(左)の目盛り線をプロット領域の内側へ向けて描画する。
-  // 右軸・上軸は元々定義していないため対象外(現状どおり非表示)。
+  // X軸(下)・Y軸(左)の主目盛りを内向きに描画する。
+  // X軸にはラベルのない月の副目盛りを追加し、右端は目盛りなしの軸線で閉じる。
   var inwardTicksPlugin = {
     id: 'inwardTicks',
     afterDraw: function (chart) {
@@ -839,7 +840,10 @@ if (typeof module !== 'undefined' && module.exports) {
       ctx.lineWidth = 1;
 
       if (xScale && xScale.position === 'bottom') {
+        var majorMonths = {};
         (xScale.ticks || []).forEach(function (tick) {
+          var tickDate = new Date(tick.value);
+          majorMonths[tickDate.getFullYear() + '-' + tickDate.getMonth()] = true;
           var xPixel = xScale.getPixelForValue(tick.value);
           if (xPixel < area.left - 0.5 || xPixel > area.right + 0.5) return;
           ctx.beginPath();
@@ -847,6 +851,27 @@ if (typeof module !== 'undefined' && module.exports) {
           ctx.lineTo(xPixel, area.bottom - TICK_MARK_LENGTH);
           ctx.stroke();
         });
+
+        // afterBuildTicksでラベル対象を2ヶ月ごとに絞っているため、
+        // その間の月初を短い副目盛りとして補う。
+        var firstVisible = new Date(xScale.min);
+        var monthCursor = new Date(firstVisible.getFullYear(), firstVisible.getMonth(), 1);
+        if (monthCursor.getTime() < xScale.min) {
+          monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+        }
+        while (monthCursor.getTime() <= xScale.max) {
+          var monthKey = monthCursor.getFullYear() + '-' + monthCursor.getMonth();
+          if (!majorMonths[monthKey]) {
+            var minorX = xScale.getPixelForValue(monthCursor.getTime());
+            if (minorX >= area.left - 0.5 && minorX <= area.right + 0.5) {
+              ctx.beginPath();
+              ctx.moveTo(minorX, area.bottom);
+              ctx.lineTo(minorX, area.bottom - MINOR_TICK_MARK_LENGTH);
+              ctx.stroke();
+            }
+          }
+          monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+        }
       }
 
       if (yScale && yScale.position === 'left') {
@@ -859,6 +884,12 @@ if (typeof module !== 'undefined' && module.exports) {
           ctx.stroke();
         });
       }
+
+      // 反対側に目盛りやラベルを増やさず、右端の軸線だけを描いて閉じる。
+      ctx.beginPath();
+      ctx.moveTo(area.right, area.top);
+      ctx.lineTo(area.right, area.bottom);
+      ctx.stroke();
 
       ctx.restore();
     }
@@ -1534,7 +1565,7 @@ if (typeof module !== 'undefined' && module.exports) {
       data: points,
       showLine: showLine,
       spanGaps: showLine,
-      borderWidth: showLine ? 1.5 : 0,
+      borderWidth: showLine ? 1 : 0,
       pointRadius: showLine ? (narrowScreenMedia.matches ? 0.25 : 1) : (narrowScreenMedia.matches ? 0.5 : 2),
       pointHoverRadius: 4,
       backgroundColor: entry.color,
@@ -1542,8 +1573,8 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
-  // 場所比較モードの固定期間表示。選択した開始月を含む12ヶ月間に軸を固定する。
-  // 4月始まりを1〜3月に開いた場合は、前年4月〜当年3月を表示する。
+  // 場所比較モードの固定期間表示。1月／4月の選択した月から同年12月末まで表示する。
+  // 4月始まりを1〜3月に開いた場合は、直近の前年4月〜12月を表示する。
   function getCalendarStartBounds() {
     var now = new Date();
     var startYear = now.getFullYear();
@@ -1552,7 +1583,7 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     return {
       start: new Date(startYear, currentCalendarStartMonth, 1),
-      end: new Date(startYear + 1, currentCalendarStartMonth, 0)
+      end: new Date(startYear, 11, 31)
     };
   }
 
