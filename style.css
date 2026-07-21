@@ -1243,7 +1243,7 @@ main {
 
 @media (max-width: 600px) {
   .app-header-inner {
-    padding-inline: 12px;
+    padding: 12px 12px 8px;
   }
   .app-header h1 {
     font-size: 1.05rem;
@@ -1262,6 +1262,10 @@ main {
   .ts-display-btn {
     flex: 1 1 0;
     min-height: 40px;
+    padding: 6px 5px;
+    font-size: 0.76rem;
+    line-height: 1.2;
+    white-space: nowrap;
   }
   .latest-cards-featured,
   .latest-cards-groups {
