@@ -1,0 +1,73 @@
+name: update_latest_cards
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎時35分。日次更新(21:10 UTC)との同時実行はconcurrencyで避ける。
+    - cron: "35 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watertemp-data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update latest river/lake observations
+        id: update_latest
+        run: |
+          failures=0
+          station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
+          if [ -z "$station_ids" ]; then
+            echo "no enabled river stations"
+          fi
+          for station_id in $station_ids; do
+            echo "=== updating latest observation for $station_id ==="
+            if ! python scripts/update_latest_wqua.py --station "$station_id"; then
+              echo "::error::failed to update latest observation for $station_id"
+              failures=$((failures + 1))
+            fi
+            sleep 2
+          done
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
+
+      - name: Validate generated data
+        run: python scripts/validate_data.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/river
+          if ! git diff --cached --quiet; then
+            git commit -m "Update latest water temperature cards"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push
+          fi
+
+      - name: Fail workflow if any source failed
+        if: always()
+        env:
+          FAILURES: ${{ steps.update_latest.outputs.failures }}
+        run: |
+          failures=${FAILURES:-0}
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::latest observation update completed with $failures failure(s)"
+            exit 1
+          fi

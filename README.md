@@ -29,6 +29,7 @@ scripts/
   migrate_initial_data.py  # 既存テキスト/CSVをアプリ用JSONへ変換する初回移行スクリプト(初期移行専用・ローカル実行専用)
   update_sea.py            # 気象庁area137/138を取得し data/sea/*.json を再生成
   update_wqua.py           # 水文水質DB(KIND=5)を取得し data/river/{station_id}.json を更新
+  update_latest_wqua.py    # 河川・湖沼のカード用最新時刻値だけを更新(recordsは変更しない)
   backfill_wqua.py         # 河川・湖沼データを2016年まで段階的に遡及取得
   append_tapwater.py       # GitHub Issue("temp: ...")から水道水温を1件追記
   validate_data.py         # 設定と全データJSONの整合性を検査
@@ -50,7 +51,11 @@ scripts/
     "record_count": 0,
     "dataset_start": "YYYY-MM-DD",
     "dataset_end": "YYYY-MM-DD",
-    "generated_utc": "ISO8601"
+    "generated_utc": "ISO8601",
+    "latest_observation": {
+      "observed_at": "YYYY-MM-DDThh:mm:ss+09:00",
+      "value": 0.0
+    }
   },
   "records": [
     {"date": "YYYY-MM-DD", "value": 0.0}
@@ -61,6 +66,7 @@ scripts/
 - 水道水温: 特記事項がある日のレコードには `note` を付与
 - 海面水温: 各レコードに観測フラグ `flag`(R/P等)を付与。欠損・非数値行はスキップし、件数を `meta.skipped` に記録
 - 北浦(参考データ): 元データの時刻情報は落として日付単位に丸め、同日複数レコードは平均(小数第1位)
+- 河川・湖沼水温: `latest_observation` は上部カード専用の最新時刻値。グラフは従来どおり日別平均の `records` を使用
 
 ## セットアップ
 
@@ -87,6 +93,11 @@ python3 scripts/validate_data.py
 2. `config/stations.json` で有効な河川・湖沼地点の直近14日を更新
 3. 各地点を1日あたり最大28日分、2016-01-01まで段階的にバックフィル
 4. 全JSONを検査してから、成功した更新をまとめてcommit/push
+
+加えて `.github/workflows/update_latest.yml` が毎時35分に、有効な河川・湖沼地点の
+当日・前日データから最新の時刻値だけを取得する。更新対象は
+`meta.latest_observation` のため、グラフ用の日別 `records` は変更しない。海面水温と
+水道水温は時刻値の配信元がないため、カードでも従来の日次最新値を表示する。
 
 外部取得は一時的な通信障害とHTTP 429/5xxを再試行する。特定の区域・地点が
 失敗しても他地点の処理と成功分の保存は継続するが、見逃さないようworkflow全体は

@@ -343,6 +343,51 @@ var CardLayoutLogic = (function () {
   };
 })();
 
+// 上部カードは時刻付きの最新観測値を優先し、未配信の系列では従来の
+// 日次recordsへフォールバックする。グラフ側はrecordsだけを使い続ける。
+var LatestCardLogic = (function () {
+  'use strict';
+
+  var OBSERVED_AT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):00\+09:00$/;
+
+  function shortDate(dateStr) {
+    var parts = String(dateStr).split('-');
+    return Number(parts[1]) + '/' + Number(parts[2]);
+  }
+
+  function reading(meta, records, todayJst) {
+    var latest = meta && meta.latest_observation;
+    var observedAt = latest && latest.observed_at;
+    var match = typeof observedAt === 'string' ? observedAt.match(OBSERVED_AT_PATTERN) : null;
+    if (
+      match &&
+      typeof latest.value === 'number' &&
+      Number.isFinite(latest.value)
+    ) {
+      var date = match[1] + '-' + match[2] + '-' + match[3];
+      var time = match[4] + ':' + match[5];
+      return {
+        value: latest.value,
+        fullDate: date + ' ' + time,
+        shortDate: date === todayJst ? time : shortDate(date),
+        hourly: true
+      };
+    }
+
+    var list = Array.isArray(records) ? records : [];
+    var last = list.length ? list[list.length - 1] : null;
+    if (!last || typeof last.value !== 'number' || !Number.isFinite(last.value)) return null;
+    return {
+      value: last.value,
+      fullDate: last.date,
+      shortDate: shortDate(last.date),
+      hourly: false
+    };
+  }
+
+  return { reading: reading };
+})();
+
 // 地点比較の色は、設定順に各 group 内のパレットを割り当てる。
 // DOMに依存させず、Nodeでもライト/ダーク双方を検証可能にする。
 var ColorAssignmentLogic = (function () {
@@ -661,6 +706,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.CardTextColorLogic = CardTextColorLogic;
   module.exports.NormalBandLogic = NormalBandLogic;
   module.exports.CardLayoutLogic = CardLayoutLogic;
+  module.exports.LatestCardLogic = LatestCardLogic;
 }
 
 (function () {
@@ -1172,22 +1218,26 @@ if (typeof module !== 'undefined' && module.exports) {
 
   function buildLatestCardElement(station) {
     var entry = seriesData[station.id];
+    var latestReading = entry
+      ? LatestCardLogic.reading(entry.meta, entry.records, currentJapanDate())
+      : null;
     var card = document.createElement('div');
     var cardTextColor = entry && entry.color
       ? CardTextColorLogic.readableSeriesColor(entry.color, isDarkMode)
       : '';
 
-    if (entry && entry.loaded) {
-      var last = entry.records[entry.records.length - 1];
+    if (latestReading) {
       card.className = 'latest-card';
       card.style.borderLeftColor = entry.color;
       card.innerHTML =
         '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
         '<span class="card-reading">' +
-          '<span class="card-value">' + last.value.toFixed(1) + '°C</span>' +
-          '<span class="card-date card-date-full">' + escapeHtml(last.date) + '</span>' +
-          '<span class="card-date card-date-short">' +
-            escapeHtml(shortDate(last.date)) + '</span>' +
+          '<span class="card-value">' + latestReading.value.toFixed(1) + '°C</span>' +
+          '<span class="card-date card-date-full">' +
+            escapeHtml(latestReading.fullDate) + '</span>' +
+          '<span class="card-date card-date-short" title="' +
+            escapeHtml(latestReading.fullDate) + '">' +
+            escapeHtml(latestReading.shortDate) + '</span>' +
         '</span>';
     } else {
       card.className = 'latest-card no-data';
@@ -1460,6 +1510,10 @@ if (typeof module !== 'undefined' && module.exports) {
   function shortDate(dateStr) {
     var date = parseDate(dateStr);
     return (date.getMonth() + 1) + '/' + date.getDate();
+  }
+
+  function currentJapanDate() {
+    return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
 
   // ---- 時系列モード ----

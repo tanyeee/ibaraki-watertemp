@@ -4,6 +4,7 @@ var assert = require('node:assert/strict');
 var appLogic = require('../app.js');
 var layout = appLogic.CardLayoutLogic;
 var colorPrefs = appLogic.SeriesColorPreferenceLogic;
+var latestCards = appLogic.LatestCardLogic;
 
 assert.equal(layout.capacity(1), 3);
 assert.equal(layout.capacity(2), 6);
@@ -71,4 +72,32 @@ assert.deepEqual(colorPrefs.load(storage, ['a']), { a: '#2F8FC2' });
 colorPrefs.save(storage, {});
 assert.equal(storageValue, null);
 
-console.log('CardLayoutLogic / SeriesColorPreferenceLogic tests OK');
+assert.deepEqual(
+  latestCards.reading(
+    {
+      latest_observation: {
+        observed_at: '2026-07-22T14:00:00+09:00',
+        value: 27.3
+      }
+    },
+    [{ date: '2026-07-22', value: 26.8 }],
+    '2026-07-22'
+  ),
+  {
+    value: 27.3,
+    fullDate: '2026-07-22 14:00',
+    shortDate: '14:00',
+    hourly: true
+  }
+);
+assert.deepEqual(
+  latestCards.reading({}, [{ date: '2026-07-21', value: 26.8 }], '2026-07-22'),
+  {
+    value: 26.8,
+    fullDate: '2026-07-21',
+    shortDate: '7/21',
+    hourly: false
+  }
+);
+
+console.log('CardLayoutLogic / SeriesColorPreferenceLogic / LatestCardLogic tests OK');

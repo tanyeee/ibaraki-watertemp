@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from datetime import date
+import re
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MIN_REASONABLE_TEMP = -5.0
 MAX_REASONABLE_TEMP = 45.0
+LATEST_OBSERVED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+09:00$")
 
 
 def validate_payload(path: Path, payload: object) -> list[str]:
@@ -76,6 +78,31 @@ def validate_payload(path: Path, payload: object) -> list[str]:
     for key in ("source", "name", "generated_utc"):
         if not isinstance(meta.get(key), str) or not meta[key]:
             errors.append(f"{path}: meta.{key} が空です")
+
+    latest = meta.get("latest_observation")
+    if latest is not None:
+        if not isinstance(latest, dict):
+            errors.append(f"{path}: meta.latest_observation がオブジェクトではありません")
+        else:
+            observed_at = latest.get("observed_at")
+            if not isinstance(observed_at, str) or not LATEST_OBSERVED_AT_RE.match(observed_at):
+                errors.append(
+                    f"{path}: meta.latest_observation.observed_at がJSTのISO日時ではありません"
+                )
+            else:
+                try:
+                    parsed_observed_at = datetime.fromisoformat(observed_at)
+                    if parsed_observed_at.utcoffset() != timedelta(hours=9):
+                        raise ValueError
+                except ValueError:
+                    errors.append(
+                        f"{path}: meta.latest_observation.observed_at が実在日時ではありません"
+                    )
+            latest_value = latest.get("value")
+            if isinstance(latest_value, bool) or not isinstance(latest_value, (int, float)):
+                errors.append(f"{path}: meta.latest_observation.value が数値ではありません")
+            elif not math.isfinite(latest_value) or not MIN_REASONABLE_TEMP <= latest_value <= MAX_REASONABLE_TEMP:
+                errors.append(f"{path}: meta.latest_observation.value が許容範囲外です: {latest_value}")
     return errors
 
 
