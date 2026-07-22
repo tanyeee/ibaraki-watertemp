@@ -1838,7 +1838,7 @@ if (typeof module !== 'undefined' && module.exports) {
       showLine: showLine,
       spanGaps: showLine,
       borderWidth: showLine ? 1 : 0,
-      pointRadius: showLine ? (narrowScreenMedia.matches ? 0.25 : 1) : (narrowScreenMedia.matches ? 0.5 : 2),
+      pointRadius: showLine ? (narrowScreenMedia.matches ? 0.25 : 1) : (narrowScreenMedia.matches ? 1.5 : 2.5),
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
@@ -2453,7 +2453,7 @@ if (typeof module !== 'undefined' && module.exports) {
           type: 'line',
           showLine: true,
           fill: false,
-          borderWidth: 1.5,
+          borderWidth: narrowScreenMedia.matches ? 1 : 1.5,
           pointRadius: 0,
           pointHitRadius: 0,
           spanGaps: true,
@@ -2511,7 +2511,7 @@ if (typeof module !== 'undefined' && module.exports) {
         pointRadius: 0,
         pointHitRadius: 6,
         pointHoverRadius: 4,
-        borderWidth: 2,
+        borderWidth: narrowScreenMedia.matches ? 1 : 2,
         tension: 0.2,
         backgroundColor: color,
         borderColor: color
