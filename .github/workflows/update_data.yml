@@ -2,6 +2,22 @@ name: update_data
 
 on:
   workflow_dispatch:
+    inputs:
+      backfill_windows:
+        description: "1回に取得する7日窓の数"
+        required: false
+        default: "4"
+        type: string
+      backfill_floor:
+        description: "遡及下限 (YYYYMMDD)"
+        required: false
+        default: "20160101"
+        type: string
+      backfill_until_floor:
+        description: "空期間を再確認しながら下限まで繰り返す"
+        required: false
+        default: false
+        type: boolean
   schedule:
     # 毎日 21:10 UTC (= JST 6:10)
     - cron: "10 21 * * *"
@@ -63,18 +79,58 @@ jobs:
 
       - name: Backfill river/lake water temperature (enabled stations)
         id: backfill_river
+        env:
+          BACKFILL_WINDOWS: ${{ inputs.backfill_windows || '4' }}
+          BACKFILL_FLOOR: ${{ inputs.backfill_floor || '20160101' }}
+          BACKFILL_UNTIL_FLOOR: ${{ inputs.backfill_until_floor || 'false' }}
         run: |
           failures=0
+          if ! [[ "$BACKFILL_WINDOWS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::backfill_windows must be a positive integer"
+            exit 1
+          fi
+          if ! [[ "$BACKFILL_FLOOR" =~ ^[0-9]{8}$ ]]; then
+            echo "::error::backfill_floor must be YYYYMMDD"
+            exit 1
+          fi
+          floor_iso="${BACKFILL_FLOOR:0:4}-${BACKFILL_FLOOR:4:2}-${BACKFILL_FLOOR:6:2}"
           station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
           if [ -z "$station_ids" ]; then
             echo "no enabled river stations"
           fi
           for station_id in $station_ids; do
             echo "=== backfilling station $station_id ==="
-            if ! python scripts/backfill_wqua.py --station "$station_id" --windows 4 --floor 20160101; then
-              echo "::error::failed to backfill river station $station_id"
-              failures=$((failures + 1))
-            fi
+            no_progress=0
+            while true; do
+              before=$(jq -r '.meta.backfill_cursor // empty' "data/river/${station_id}.json")
+              if ! python scripts/backfill_wqua.py \
+                --station "$station_id" \
+                --windows "$BACKFILL_WINDOWS" \
+                --floor "$BACKFILL_FLOOR"; then
+                echo "::error::failed to backfill river station $station_id"
+                failures=$((failures + 1))
+                break
+              fi
+              if [ "$BACKFILL_UNTIL_FLOOR" != "true" ]; then
+                break
+              fi
+              after=$(jq -r '.meta.backfill_cursor // empty' "data/river/${station_id}.json")
+              if [[ -n "$after" && ( "$after" < "$floor_iso" || "$after" == "$floor_iso" ) ]]; then
+                echo "backfill target reached: station=$station_id cursor=$after floor=$floor_iso"
+                break
+              fi
+              if [ "$after" = "$before" ]; then
+                no_progress=$((no_progress + 1))
+                if [ "$no_progress" -ge 3 ]; then
+                  echo "::error::backfill cursor did not advance: station=$station_id cursor=$after"
+                  failures=$((failures + 1))
+                  break
+                fi
+              else
+                no_progress=0
+              fi
+              sleep 2
+            done
           done
           echo "failures=$failures" >> "$GITHUB_OUTPUT"
 
