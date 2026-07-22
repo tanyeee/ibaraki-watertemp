@@ -28,7 +28,7 @@ import argparse
 import csv
 import re
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 from typing import Iterator
@@ -47,7 +47,9 @@ WQUA_URL_TEMPLATE = (
 )
 DAT_LINK_RE = re.compile(r'href=["\'](?P<href>/dat/dload/download/[^"\']+\.dat)["\']', re.IGNORECASE)
 DATE_RE = re.compile(r"^\d{4}/\d{2}/\d{2}$")
+TIME_RE = re.compile(r"^(?P<hour>\d{1,2}):?(?P<minute>\d{2})$")
 USER_AGENT = "Mozilla/5.0 (compatible; IbarakiWaterTempBot/1.0; +https://github.com/)"
+JST = timezone(timedelta(hours=9))
 
 # BGNDATE〜ENDDATEの差の上限(実測で確認したサーバー側制約)。
 MAX_WINDOW_SPAN_DAYS = 7
@@ -81,10 +83,31 @@ def extract_dat_link(html: str) -> str | None:
     return m.group("href") if m else None
 
 
-def parse_wqua_dat(text: str) -> dict[str, list[float]]:
-    """KIND=5(水質自動監視)の.datテキストから水温を抽出し、
-    日付(YYYY-MM-DD)ごとの値リストを返す。"""
+def parse_observed_at(date_raw: str, time_raw: str) -> datetime | None:
+    """.dat の年月日・時分をJSTのdatetimeへ変換する。24:00にも対応する。"""
+    match = TIME_RE.match(time_raw.strip())
+    if not match:
+        return None
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute"))
+    if minute > 59 or hour > 24 or (hour == 24 and minute != 0):
+        return None
+    try:
+        observed = datetime.strptime(date_raw, "%Y/%m/%d").replace(tzinfo=JST)
+    except ValueError:
+        return None
+    if hour == 24:
+        return observed + timedelta(days=1)
+    return observed.replace(hour=hour, minute=minute)
+
+
+def parse_wqua_dat_with_latest(
+    text: str,
+) -> tuple[dict[str, list[float]], dict[str, str | float] | None]:
+    """日次平均用の値と、時刻を保持した最新の有効観測値を返す。"""
     daily: dict[str, list[float]] = {}
+    latest_datetime: datetime | None = None
+    latest: dict[str, str | float] | None = None
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -107,16 +130,31 @@ def parse_wqua_dat(text: str) -> dict[str, list[float]]:
             continue
         date_str = date_raw.replace("/", "-")
         daily.setdefault(date_str, []).append(value)
+        observed_at = parse_observed_at(date_raw, row[1].strip())
+        if observed_at is not None and (
+            latest_datetime is None or observed_at >= latest_datetime
+        ):
+            latest_datetime = observed_at
+            latest = {
+                "observed_at": observed_at.isoformat(timespec="seconds"),
+                "value": value,
+            }
+    return daily, latest
+
+
+def parse_wqua_dat(text: str) -> dict[str, list[float]]:
+    """KIND=5の.datから日付(YYYY-MM-DD)ごとの水温リストを返す。"""
+    daily, _latest = parse_wqua_dat_with_latest(text)
     return daily
 
 
-def fetch_window(
+def fetch_window_with_latest(
     session: requests.Session,
     station_id: str,
     bgn: date,
     end: date,
     timeout: int,
-) -> dict[str, list[float]]:
+) -> tuple[dict[str, list[float]], dict[str, str | float] | None]:
     page_url = WQUA_URL_TEMPLATE.format(
         station_id=station_id,
         bgn=bgn.strftime("%Y%m%d"),
@@ -128,12 +166,24 @@ def fetch_window(
     href = extract_dat_link(html)
     if not href:
         # 観測期間外・データなしなどで.datリンクが無い場合
-        return {}
+        return {}, None
     dat_url = urljoin(BASE_URL, href)
     dat_resp = session.get(dat_url, timeout=timeout)
     dat_resp.raise_for_status()
     text = decode_bytes(dat_resp.content)
-    return parse_wqua_dat(text)
+    return parse_wqua_dat_with_latest(text)
+
+
+def fetch_window(
+    session: requests.Session,
+    station_id: str,
+    bgn: date,
+    end: date,
+    timeout: int,
+) -> dict[str, list[float]]:
+    """従来どおり日次平均用の値だけを取得する。"""
+    daily, _latest = fetch_window_with_latest(session, station_id, bgn, end, timeout)
+    return daily
 
 
 def daily_average(values: list[float]) -> float:
@@ -176,7 +226,12 @@ def update_station(
             # 長時間のブートストラップでも中断時に進捗が残るよう、都度書き戻す。
             preserved_backfill = {
                 key: existing_payload.get("meta", {})[key]
-                for key in ("backfill_cursor", "backfill_done", "backfill_pending_empty")
+                for key in (
+                    "backfill_cursor",
+                    "backfill_done",
+                    "backfill_pending_empty",
+                    "latest_observation",
+                )
                 if key in existing_payload.get("meta", {})
             }
             meta = build_meta(
