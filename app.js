@@ -88,6 +88,28 @@ var DateRangeLogic = (function () {
     });
   }
 
+  function isIsoDate(value) {
+    var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    var parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return parsed.getFullYear() === Number(match[1]) &&
+      parsed.getMonth() === Number(match[2]) - 1 &&
+      parsed.getDate() === Number(match[3]);
+  }
+
+  function validateCustomRange(start, end, minimum, maximum) {
+    if (!isIsoDate(start) || !isIsoDate(end)) {
+      return { valid: false, message: '開始日と終了日を選択してください' };
+    }
+    if (start > end) {
+      return { valid: false, message: '開始日は終了日以前にしてください' };
+    }
+    if ((minimum && start < minimum) || (maximum && end > maximum)) {
+      return { valid: false, message: 'データが存在する期間内で選択してください' };
+    }
+    return { valid: true, message: '' };
+  }
+
   function getRangeBounds(rangeKey, referenceDate) {
     var end = referenceDate ? new Date(referenceDate.getTime()) : new Date();
     end.setHours(0, 0, 0, 0);
@@ -107,7 +129,9 @@ var DateRangeLogic = (function () {
     parseDate: parseDate,
     addMonths: addMonths,
     filterByRange: filterByRange,
-    getRangeBounds: getRangeBounds
+    getRangeBounds: getRangeBounds,
+    isIsoDate: isIsoDate,
+    validateCustomRange: validateCustomRange
   };
 })();
 
@@ -737,11 +761,12 @@ if (typeof module !== 'undefined' && module.exports) {
   var seriesData = {};             // id -> { config, meta, records, color, loaded, error }
   var currentMode = 'timeseries';
   var currentRange = '1y';
-  var currentCalendarStartMonth = 0; // 0: 1月 | 3: 4月
   var TS_DISPLAY_MODE_STORAGE_KEY = 'watertemp_ts_display_mode';
+  var TS_CUSTOM_RANGE_STORAGE_KEY = 'watertemp_ts_custom_range';
   var TS_PLOT_STYLE_STORAGE_KEY = 'watertemp_ts_plot_style';
   var THEME_STORAGE_KEY = 'watertemp_theme';
-  var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling'
+  var currentTsDisplayMode = 'rolling'; // 'jan-start' | 'rolling' | 'custom'
+  var currentCustomDateRange = null; // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
   var currentTsPlotStyle = 'standard'; // 'standard' | 'dots'
   var TICK_MARK_LENGTH = 6;
   var MINOR_TICK_MARK_LENGTH = 3;
@@ -863,16 +888,41 @@ if (typeof module !== 'undefined' && module.exports) {
     }
   }
 
-  // 場所比較モードの表示形式(1月始まり/直近表示)をlocalStorageから復元する。
+  // 場所比較モードの表示形式をlocalStorageから復元する。
   // 未保存/破損時は既定値の「直近表示」を返す。
   function loadTsDisplayModePref() {
     var storage = getLocalStorage();
     if (!storage) return 'rolling';
     try {
       var value = storage.getItem(TS_DISPLAY_MODE_STORAGE_KEY);
-      return value === 'jan-start' ? 'jan-start' : 'rolling';
+      return value === 'jan-start' || value === 'custom' ? value : 'rolling';
     } catch (err) {
       return 'rolling';
+    }
+  }
+
+  function loadCustomDateRangePref() {
+    var storage = getLocalStorage();
+    if (!storage) return null;
+    try {
+      var value = JSON.parse(storage.getItem(TS_CUSTOM_RANGE_STORAGE_KEY));
+      var validation = DateRangeLogic.validateCustomRange(
+        value && value.start,
+        value && value.end
+      );
+      return validation.valid ? { start: value.start, end: value.end } : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveCustomDateRangePref(range) {
+    var storage = getLocalStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(TS_CUSTOM_RANGE_STORAGE_KEY, JSON.stringify(range));
+    } catch (err) {
+      // localStorageが使えない環境では現在のページ内だけで反映する
     }
   }
 
@@ -1899,17 +1949,12 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
-  // 場所比較モードの固定期間表示。1月／4月の選択した月から同年12月末まで表示する。
-  // 4月始まりを1〜3月に開いた場合は、直近の前年4月〜12月を表示する。
+  // 場所比較モードの「1月始まり」。当年1月から12月末まで表示する。
   function getCalendarStartBounds() {
     var now = new Date();
-    var startYear = now.getFullYear();
-    if (now.getMonth() < currentCalendarStartMonth) {
-      startYear -= 1;
-    }
     return {
-      start: new Date(startYear, currentCalendarStartMonth, 1),
-      end: new Date(startYear, 11, 31)
+      start: new Date(now.getFullYear(), 0, 1),
+      end: new Date(now.getFullYear(), 11, 31)
     };
   }
 
@@ -1926,12 +1971,11 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
-  // 固定期間表示では開始月から2ヶ月おきに目盛りを残し、
-  // 4月始まりでも先頭の「4月」が省略されないようにする。
+  // 固定期間表示では1月から2ヶ月おきに目盛りを残す。
   function keepCalendarMonthTicks(axis) {
     axis.ticks = (axis.ticks || []).filter(function (tick) {
       var month = new Date(tick.value).getMonth();
-      return (month - currentCalendarStartMonth + 12) % 2 === 0;
+      return month % 2 === 0;
     });
   }
 
@@ -2005,9 +2049,19 @@ if (typeof module !== 'undefined' && module.exports) {
   function renderTimeseriesChart() {
     var canvas = document.getElementById('chart-timeseries');
     var isCalendarStart = currentTsDisplayMode === 'jan-start';
-    var bounds = isCalendarStart ? getCalendarStartBounds() : getRangeBounds(currentRange);
+    var isCustomRange = currentTsDisplayMode === 'custom' && currentCustomDateRange;
+    var bounds = isCalendarStart
+      ? getCalendarStartBounds()
+      : isCustomRange
+        ? {
+            start: parseDate(currentCustomDateRange.start),
+            end: parseDate(currentCustomDateRange.end)
+          }
+        : getRangeBounds(currentRange);
     var ids = checkedSeriesIds();
     var isShortRolling = !isCalendarStart && SHORT_ROLLING_RANGES.indexOf(currentRange) !== -1;
+    var isShortCustom = isCustomRange &&
+      bounds.end.getTime() - bounds.start.getTime() <= 210 * 24 * 60 * 60 * 1000;
 
     var datasets = loadedStations()
       .filter(function (s) {
@@ -2032,7 +2086,7 @@ if (typeof module !== 'undefined' && module.exports) {
     };
     if (isCalendarStart) {
       scalesX.afterBuildTicks = keepCalendarMonthTicks;
-    } else if (!isShortRolling) {
+    } else if (!isShortRolling && !isShortCustom) {
       scalesX.afterBuildTicks = keepOddMonthTicks;
     }
     if (bounds.start) {
@@ -2127,32 +2181,112 @@ if (typeof module !== 'undefined' && module.exports) {
         buttons.forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentRange = btn.dataset.range;
-        renderTimeseriesChart();
-      });
-    });
-  }
-
-  function initCalendarStartButtons() {
-    var buttons = document.querySelectorAll('#calendar-start-buttons button[data-start-month]');
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var startMonth = Number(btn.dataset.startMonth);
-        if ((startMonth !== 0 && startMonth !== 3) || startMonth === currentCalendarStartMonth) return;
-        currentCalendarStartMonth = startMonth;
+        currentTsDisplayMode = 'rolling';
+        saveTsDisplayModePref(currentTsDisplayMode);
         updateTsDisplayModeUI();
         renderTimeseriesChart();
       });
     });
   }
 
-  // 場所比較モードの表示形式(1月始まり/直近表示)に応じて、
-  // トグルボタンの見た目と表示期間ボタンの表示/非表示を切り替える。
+  function dateToInputValue(date) {
+    var year = date.getFullYear();
+    var month = String(date.getMonth() + 1).padStart(2, '0');
+    var day = String(date.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+
+  function availableTimeseriesDateLimits() {
+    var min = null;
+    var max = null;
+    loadedStations().forEach(function (station) {
+      var records = seriesData[station.id].records;
+      if (!records.length) return;
+      var first = records[0].date;
+      var last = records[records.length - 1].date;
+      if (!min || first < min) min = first;
+      if (!max || last > max) max = last;
+    });
+    return { min: min, max: max };
+  }
+
+  function initialCustomDateRange(limits) {
+    if (currentCustomDateRange) return currentCustomDateRange;
+    var bounds = currentTsDisplayMode === 'jan-start'
+      ? getCalendarStartBounds()
+      : getRangeBounds(currentRange);
+    var start = dateToInputValue(bounds.start);
+    var end = dateToInputValue(bounds.end);
+    if (limits.min && start < limits.min) start = limits.min;
+    if (limits.max && end > limits.max) end = limits.max;
+    return { start: start, end: end };
+  }
+
+  function initCustomDateRange() {
+    var startInput = document.getElementById('custom-date-start');
+    var endInput = document.getElementById('custom-date-end');
+    var applyButton = document.getElementById('custom-date-apply');
+    var status = document.getElementById('custom-date-range-status');
+    if (!startInput || !endInput || !applyButton || !status) return;
+
+    var limits = availableTimeseriesDateLimits();
+    [startInput, endInput].forEach(function (input) {
+      if (limits.min) input.min = limits.min;
+      if (limits.max) input.max = limits.max;
+    });
+
+    var initial = initialCustomDateRange(limits);
+    var initialValidation = DateRangeLogic.validateCustomRange(
+      initial.start, initial.end, limits.min, limits.max
+    );
+    if (!initialValidation.valid) {
+      initial = { start: limits.min || '', end: limits.max || '' };
+      currentCustomDateRange = null;
+      if (currentTsDisplayMode === 'custom') {
+        currentTsDisplayMode = 'rolling';
+        saveTsDisplayModePref(currentTsDisplayMode);
+      }
+    }
+    startInput.value = initial.start;
+    endInput.value = initial.end;
+
+    function clearError() {
+      if (!status.classList.contains('error')) return;
+      status.textContent = '';
+      status.classList.remove('error');
+    }
+    startInput.addEventListener('input', clearError);
+    endInput.addEventListener('input', clearError);
+
+    applyButton.addEventListener('click', function () {
+      var validation = DateRangeLogic.validateCustomRange(
+        startInput.value, endInput.value, limits.min, limits.max
+      );
+      if (!validation.valid) {
+        status.textContent = validation.message;
+        status.classList.add('error');
+        return;
+      }
+      currentCustomDateRange = {
+        start: startInput.value,
+        end: endInput.value
+      };
+      currentTsDisplayMode = 'custom';
+      saveCustomDateRangePref(currentCustomDateRange);
+      saveTsDisplayModePref(currentTsDisplayMode);
+      updateTsDisplayModeUI();
+      renderTimeseriesChart();
+    });
+  }
+
+  // 場所比較モードの表示形式に応じて、トグルと期間操作の状態をそろえる。
   function updateTsDisplayModeUI() {
     var toggle = document.getElementById('ts-display-toggle');
     var rangeButtons = document.getElementById('range-buttons');
-    var calendarStartButtons = document.getElementById('calendar-start-buttons');
-    if (!toggle || !rangeButtons || !calendarStartButtons) return;
-    var isCalendarStart = currentTsDisplayMode === 'jan-start';
+    var customPanel = document.getElementById('custom-date-range');
+    var customStatus = document.getElementById('custom-date-range-status');
+    if (!toggle || !rangeButtons || !customPanel || !customStatus) return;
+    var isCustomRange = currentTsDisplayMode === 'custom';
 
     toggle.querySelectorAll('.ts-display-btn').forEach(function (btn) {
       var active = btn.dataset.displayMode === currentTsDisplayMode;
@@ -2160,13 +2294,11 @@ if (typeof module !== 'undefined' && module.exports) {
       btn.setAttribute('aria-pressed', String(active));
     });
 
-    rangeButtons.classList.toggle('is-hidden', isCalendarStart);
-    calendarStartButtons.classList.toggle('is-hidden', !isCalendarStart);
-    calendarStartButtons.querySelectorAll('button[data-start-month]').forEach(function (btn) {
-      var active = Number(btn.dataset.startMonth) === currentCalendarStartMonth;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-pressed', String(active));
-    });
+    rangeButtons.classList.toggle('is-hidden', currentTsDisplayMode !== 'rolling');
+    customPanel.classList.toggle('active', isCustomRange);
+    customPanel.setAttribute('aria-current', isCustomRange ? 'true' : 'false');
+    customStatus.classList.remove('error');
+    customStatus.textContent = '';
   }
 
   function initTsDisplayToggle() {
@@ -2773,7 +2905,11 @@ if (typeof module !== 'undefined' && module.exports) {
     updateThemeToggleButton();
     cardsExpanded = loadCardsExpandedPref();
     initCardsToggle();
+    currentCustomDateRange = loadCustomDateRangePref();
     currentTsDisplayMode = loadTsDisplayModePref();
+    if (currentTsDisplayMode === 'custom' && !currentCustomDateRange) {
+      currentTsDisplayMode = 'rolling';
+    }
     currentTsPlotStyle = loadTsPlotStylePref();
     initTsZoomResetButton();
     window.addEventListener('resize', scheduleLatestCardNameSizing);
@@ -2813,7 +2949,7 @@ if (typeof module !== 'undefined' && module.exports) {
         initSeriesColorControls();
         buildYearlySelect();
         initRangeButtons();
-        initCalendarStartButtons();
+        initCustomDateRange();
         initTsDisplayToggle();
         initTsPlotStyleToggle();
         initTabs();
