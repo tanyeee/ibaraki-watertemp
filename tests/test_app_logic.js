@@ -5,6 +5,7 @@ var appLogic = require('../app.js');
 var layout = appLogic.CardLayoutLogic;
 var colorPrefs = appLogic.SeriesColorPreferenceLogic;
 var latestCards = appLogic.LatestCardLogic;
+var dateRanges = appLogic.DateRangeLogic;
 
 assert.equal(layout.capacity(1), 3);
 assert.equal(layout.capacity(2), 6);
@@ -100,4 +101,19 @@ assert.deepEqual(
   }
 );
 
-console.log('CardLayoutLogic / SeriesColorPreferenceLogic / LatestCardLogic tests OK');
+assert.equal(dateRanges.isIsoDate('2021-04-01'), true);
+assert.equal(dateRanges.isIsoDate('2021-02-29'), false);
+assert.deepEqual(
+  dateRanges.validateCustomRange('2021-04-01', '2022-03-31', '2016-01-01', '2026-09-09'),
+  { valid: true, message: '' }
+);
+assert.equal(
+  dateRanges.validateCustomRange('2022-04-01', '2022-03-31').valid,
+  false
+);
+assert.equal(
+  dateRanges.validateCustomRange('2015-12-31', '2022-03-31', '2016-01-01', '2026-09-09').valid,
+  false
+);
+
+console.log('CardLayoutLogic / SeriesColorPreferenceLogic / LatestCardLogic / DateRangeLogic tests OK');
