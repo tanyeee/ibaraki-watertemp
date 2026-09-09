@@ -737,6 +737,8 @@ main {
 }
 
 .custom-date-range button {
+  align-self: end;
+  height: 40px;
   min-width: 68px;
   padding: 8px 14px;
   background: var(--color-accent);
