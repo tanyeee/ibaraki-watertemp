@@ -895,7 +895,8 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!storage) return 'rolling';
     try {
       var value = storage.getItem(TS_DISPLAY_MODE_STORAGE_KEY);
-      return value === 'jan-start' || value === 'custom' ? value : 'rolling';
+      // 任意期間の適用状態は復元せず、次回起動時は直近表示へ戻す。
+      return value === 'jan-start' ? 'jan-start' : 'rolling';
     } catch (err) {
       return 'rolling';
     }
@@ -1995,9 +1996,7 @@ if (typeof module !== 'undefined' && module.exports) {
   // 少なく奇数月フィルタを適用するとラベルが0件になり得るため対象外とする。
   var SHORT_ROLLING_RANGES = ['1m', '3m', '6m'];
 
-  // ズームリセットボタンの見た目を、現在のズーム/パン状態に応じて更新する。
-  // 脱出手段を確実に残すため、プラグインが有効な間はボタン自体は常に押せる
-  // (ズーム中でなければ強調表示だけ外す)。
+  // 任意期間を表示中は直近表示へ、ズーム中は元の表示範囲へ戻す。
   // タッチ操作(狭い画面/coarseポインタ)かどうかで操作案内の文言を切り替える。
   function tsZoomHintText() {
     var isTouch = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
@@ -2008,18 +2007,22 @@ if (typeof module !== 'undefined' && module.exports) {
   function updateTsZoomResetButton() {
     var btn = document.getElementById('ts-zoom-reset');
     var hint = document.getElementById('ts-zoom-hint');
+    var indicator = document.getElementById('ts-period-indicator');
+    var toolbar = document.getElementById('ts-chart-toolbar');
+    var isCustom = currentTsDisplayMode === 'custom';
     if (!btn) return;
-    if (!zoomPluginAvailable || !tsChart) {
-      btn.disabled = true;
-      if (hint) hint.hidden = true;
-      return;
-    }
-    var zoomed = typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
-    btn.disabled = !zoomed;
-    btn.classList.toggle('zoom-active', !!zoomed);
+    var zoomed = zoomPluginAvailable && tsChart &&
+      typeof tsChart.isZoomedOrPanned === 'function' && tsChart.isZoomedOrPanned();
+    if (toolbar) toolbar.hidden = !zoomPluginAvailable && !isCustom;
+    btn.hidden = !zoomPluginAvailable && !isCustom;
+    btn.disabled = !isCustom && !zoomed;
+    btn.classList.toggle('zoom-active', !!zoomed || isCustom);
+    btn.setAttribute('aria-label', isCustom ? '期間指定を解除して直近表示に戻す' : 'ズームをリセット');
+    btn.title = isCustom ? '直近表示に戻す' : 'ズームをリセット';
+    if (indicator) indicator.hidden = !isCustom;
     if (hint) {
       hint.textContent = tsZoomHintText();
-      hint.hidden = false;
+      hint.hidden = !zoomPluginAvailable;
     }
   }
 
@@ -2035,6 +2038,11 @@ if (typeof module !== 'undefined' && module.exports) {
       hint.textContent = tsZoomHintText();
     }
     btn.addEventListener('click', function () {
+      if (currentTsDisplayMode === 'custom') {
+        currentTsDisplayMode = 'rolling';
+        saveTsDisplayModePref(currentTsDisplayMode);
+        updateTsDisplayModeUI();
+      }
       // resetZoomが効かない異常状態でも必ず戻れるよう、
       // ズーム解除のうえチャートを作り直すハードリセットにする。
       try {
@@ -2226,6 +2234,7 @@ if (typeof module !== 'undefined' && module.exports) {
     var startInput = document.getElementById('custom-date-start');
     var endInput = document.getElementById('custom-date-end');
     var applyButton = document.getElementById('custom-date-apply');
+    var latestButton = document.getElementById('custom-date-latest');
     var status = document.getElementById('custom-date-range-status');
     if (!startInput || !endInput || !applyButton || !status) return;
 
@@ -2257,6 +2266,16 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     startInput.addEventListener('input', clearError);
     endInput.addEventListener('input', clearError);
+
+    if (latestButton) {
+      latestButton.disabled = !limits.max;
+      latestButton.title = limits.max ? '最新データ: ' + limits.max : 'データ未取得';
+      latestButton.addEventListener('click', function () {
+        if (!limits.max) return;
+        endInput.value = limits.max;
+        clearError();
+      });
+    }
 
     applyButton.addEventListener('click', function () {
       var validation = DateRangeLogic.validateCustomRange(

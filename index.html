@@ -111,6 +111,7 @@
     <div class="chart-wrap chart-wrap-timeseries">
       <div class="ts-chart-toolbar" id="ts-chart-toolbar">
         <span class="ts-zoom-hint" id="ts-zoom-hint" hidden></span>
+        <span class="ts-period-indicator" id="ts-period-indicator" hidden aria-live="polite">期間指定中</span>
         <button type="button" id="ts-zoom-reset" class="zoom-reset-button" disabled hidden>リセット</button>
       </div>
       <div class="chart-canvas-area chart-canvas-area-timeseries">
@@ -124,10 +125,13 @@
           <span>開始日</span>
           <input type="date" id="custom-date-start">
         </label>
-        <label for="custom-date-end">
-          <span>終了日</span>
+        <div class="custom-date-end-field">
+          <div class="custom-date-end-heading">
+            <label for="custom-date-end">終了日</label>
+            <button type="button" id="custom-date-latest" aria-label="終了日を最新データの日付にする">最新</button>
+          </div>
           <input type="date" id="custom-date-end">
-        </label>
+        </div>
         <button type="button" id="custom-date-apply">表示</button>
       </div>
       <p class="custom-date-range-status" id="custom-date-range-status" aria-live="polite"></p>

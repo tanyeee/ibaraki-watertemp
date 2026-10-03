@@ -708,7 +708,8 @@ main {
   gap: 8px;
 }
 
-.custom-date-range label {
+.custom-date-range-grid > label,
+.custom-date-end-field {
   display: grid;
   grid-template-rows: auto 40px;
   min-width: 0;
@@ -736,7 +737,7 @@ main {
   font-size: 0.82rem;
 }
 
-.custom-date-range button {
+.custom-date-range #custom-date-apply {
   align-self: end;
   height: 40px;
   min-width: 68px;
@@ -763,6 +764,39 @@ main {
 .custom-date-range-status.error {
   display: block;
   color: var(--color-error);
+}
+
+.custom-date-end-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.custom-date-range #custom-date-latest {
+  padding: 0 8px;
+  min-height: 24px;
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.custom-date-range #custom-date-latest:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ts-period-indicator {
+  margin-left: auto;
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ts-period-indicator[hidden] {
+  display: none;
 }
 
 .series-picker {
@@ -1611,7 +1645,8 @@ main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
     gap: 6px;
   }
-  .custom-date-range label {
+  .custom-date-range-grid > label,
+  .custom-date-end-field {
     grid-template-rows: auto 40px;
     font-size: 0.7rem;
   }
@@ -1620,7 +1655,7 @@ main {
     padding-inline: 5px;
     font-size: 0.72rem;
   }
-  .custom-date-range button {
+  .custom-date-range #custom-date-apply {
     min-width: 56px;
     padding-inline: 5px;
     font-size: 0.76rem;
