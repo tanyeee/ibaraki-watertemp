@@ -800,6 +800,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var NORMAL_BAND_LINE_DARK = 'rgba(205, 220, 232, 0.85)';
   var NORMAL_BAND_STORAGE_KEY = 'watertemp_yearly_normal_band';
   var NORMAL_MEAN_STORAGE_KEY = 'watertemp_yearly_normal_mean';
+  var YEARLY_MARKERS_STORAGE_KEY = 'watertemp_yearly_markers';
 
   // ---- アプリ状態 ----
   var stationsConfig = [];         // config/stations.json の series 配列
@@ -2455,20 +2456,20 @@ if (typeof module !== 'undefined' && module.exports) {
     }
   }
 
-  // 平年値バンドの表示可否(チェック状態)をlocalStorageから復元する。
-  // 未保存時は既定値のON(true)を返す。
-  function loadNormalBandPref(key) {
+  // 年比較の表示オプションを個別に保存・復元する。
+  function loadYearlyTogglePref(key, fallback) {
     var storage = getLocalStorage();
-    if (!storage) return true;
+    if (fallback === undefined) fallback = true;
+    if (!storage) return fallback;
     try {
       var value = storage.getItem(key || NORMAL_BAND_STORAGE_KEY);
-      return value === null ? true : value === '1';
+      return value === null ? fallback : value === '1';
     } catch (err) {
-      return true;
+      return fallback;
     }
   }
 
-  function saveNormalBandPref(checked, key) {
+  function saveYearlyTogglePref(checked, key) {
     var storage = getLocalStorage();
     if (!storage) return;
     try {
@@ -2665,17 +2666,23 @@ if (typeof module !== 'undefined' && module.exports) {
       renderYearlyChart();
     });
     document.getElementById('yearly-show-all').addEventListener('change', renderYearlyChart);
+    var markersCheckbox = document.getElementById('yearly-show-markers');
+    markersCheckbox.checked = loadYearlyTogglePref(YEARLY_MARKERS_STORAGE_KEY, false);
+    markersCheckbox.addEventListener('change', function () {
+      saveYearlyTogglePref(markersCheckbox.checked, YEARLY_MARKERS_STORAGE_KEY);
+      renderYearlyChart();
+    });
 
     var normalBandCheckbox = document.getElementById('yearly-normal-band');
-    normalBandCheckbox.checked = loadNormalBandPref();
+    normalBandCheckbox.checked = loadYearlyTogglePref();
     normalBandCheckbox.addEventListener('change', function () {
-      saveNormalBandPref(normalBandCheckbox.checked);
+      saveYearlyTogglePref(normalBandCheckbox.checked);
       renderYearlyChart();
     });
     var normalMeanCheckbox = document.getElementById('yearly-normal-mean');
-    normalMeanCheckbox.checked = loadNormalBandPref(NORMAL_MEAN_STORAGE_KEY);
+    normalMeanCheckbox.checked = loadYearlyTogglePref(NORMAL_MEAN_STORAGE_KEY);
     normalMeanCheckbox.addEventListener('change', function () {
-      saveNormalBandPref(normalMeanCheckbox.checked, NORMAL_MEAN_STORAGE_KEY);
+      saveYearlyTogglePref(normalMeanCheckbox.checked, NORMAL_MEAN_STORAGE_KEY);
       renderYearlyChart();
     });
 
@@ -2705,6 +2712,7 @@ if (typeof module !== 'undefined' && module.exports) {
       : '各年の同じ月日を比較します（現在は通年表示）。';
     if (!hasData) periodStatus.textContent += ' 選択した年・期間に観測データがありません。';
     var showAllYears = document.getElementById('yearly-show-all').checked;
+    var showMarkers = document.getElementById('yearly-show-markers').checked;
     var datasets = [];
 
     var normalBandCheckbox = document.getElementById('yearly-normal-band');
@@ -2818,7 +2826,8 @@ if (typeof module !== 'undefined' && module.exports) {
         type: 'line',
         showLine: true,
         spanGaps: false,
-        pointRadius: points.length === 1 ? 2 : 0,
+        pointRadius: showMarkers || points.length === 1 ? 2 : 0,
+        pointBorderWidth: 0,
         pointHitRadius: 6,
         pointHoverRadius: 4,
         borderWidth: narrowScreenMedia.matches ? 1 : 2,
@@ -2864,7 +2873,7 @@ if (typeof module !== 'undefined' && module.exports) {
         });
         var checkbox = dataset._normalBand ? normalBandCheckbox : normalMeanCheckbox;
         checkbox.checked = visible;
-        saveNormalBandPref(visible, dataset._normalBand ? NORMAL_BAND_STORAGE_KEY : NORMAL_MEAN_STORAGE_KEY);
+        saveYearlyTogglePref(visible, dataset._normalBand ? NORMAL_BAND_STORAGE_KEY : NORMAL_MEAN_STORAGE_KEY);
       } else {
         chart.setDatasetVisibility(item.datasetIndex, visible);
       }
