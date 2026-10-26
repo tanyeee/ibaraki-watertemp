@@ -182,6 +182,29 @@
       </div>
     </div>
     <div class="controls yearly-controls">
+      <section class="yearly-period" aria-label="年比較の表示期間">
+        <div class="yearly-period-grid">
+          <div class="yearly-period-field">
+            <span id="yearly-period-start-label">開始月日</span>
+            <div class="yearly-month-day" role="group" aria-labelledby="yearly-period-start-label">
+              <select id="yearly-period-start-month" aria-label="開始月"></select>
+              <select id="yearly-period-start-day" aria-label="開始日"></select>
+            </div>
+          </div>
+          <div class="yearly-period-field">
+            <span id="yearly-period-end-label">終了月日</span>
+            <div class="yearly-month-day" role="group" aria-labelledby="yearly-period-end-label">
+              <select id="yearly-period-end-month" aria-label="終了月"></select>
+              <select id="yearly-period-end-day" aria-label="終了日"></select>
+            </div>
+          </div>
+          <button type="button" id="yearly-period-apply">表示</button>
+        </div>
+        <div class="yearly-period-footer">
+          <p id="yearly-period-status" aria-live="polite"></p>
+          <button type="button" id="yearly-period-reset">通年に戻す</button>
+        </div>
+      </section>
       <div class="control-group">
         <label for="yearly-series-select">系列を選択:</label>
         <select id="yearly-series-select"></select>
@@ -200,6 +223,10 @@
       <label class="yearly-background-toggle" id="yearly-normal-band-label">
         <input type="checkbox" id="yearly-normal-band">
         <span>平年値バンドを表示</span>
+      </label>
+      <label class="yearly-background-toggle">
+        <input type="checkbox" id="yearly-normal-mean">
+        <span>平均値を表示</span>
       </label>
       <span id="yearly-normal-band-note" class="control-help yearly-normal-band-note"></span>
     </div>

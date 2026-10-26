@@ -1308,6 +1308,97 @@ main {
   width: 100%;
 }
 
+.yearly-controls > .yearly-period + .control-group {
+  width: 100%;
+}
+
+.yearly-period {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.yearly-period-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.yearly-period-field {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.76rem;
+  color: var(--color-muted);
+}
+
+.yearly-month-day {
+  display: flex;
+  gap: 4px;
+}
+
+#panel-yearly .yearly-month-day select {
+  width: 50%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px 0 3px;
+  font-size: 0.72rem;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+    linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+  background-position: calc(100% - 7px) 50%, calc(100% - 4px) 50%;
+  background-size: 3px 3px;
+  background-repeat: no-repeat;
+}
+
+.yearly-period button {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+#yearly-period-apply {
+  height: 40px;
+  padding: 0 12px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.yearly-period-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#yearly-period-status {
+  flex: 1;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+#yearly-period-status.error {
+  color: var(--color-error);
+}
+
+#yearly-period-reset {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  background: var(--color-control);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  min-height: 32px;
+}
+
 .yearly-add-control select {
   min-width: 8.5rem;
   min-height: 36px;

@@ -48,12 +48,56 @@ var YearlyComparisonLogic = (function () {
     return selectedYears.filter(function (selectedYear) { return selectedYear !== year; });
   }
 
+  // 実際の観測日で判定し、共通年へ写した際の2月29日や夏時間に影響されない。
+  function isGap(first, second) {
+    if (!first || !second || !first.origDate || !second.origDate) return false;
+    return Date.parse(second.origDate + 'T00:00:00Z') -
+      Date.parse(first.origDate + 'T00:00:00Z') > 86400000;
+  }
+
+  function validMonthDay(value) {
+    if (!/^\d{2}-\d{2}$/.test(value || '')) return false;
+    var parts = value.split('-').map(Number);
+    var date = new Date(2000, parts[0] - 1, parts[1]);
+    return date.getMonth() === parts[0] - 1 && date.getDate() === parts[1];
+  }
+
+  function validatePeriod(start, end) {
+    if (!validMonthDay(start) || !validMonthDay(end)) {
+      return { valid: false, message: '有効な開始月日と終了月日を選択してください' };
+    }
+    if (start > end) {
+      return { valid: false, message: '開始月日は終了月日以前にしてください（同じ年内の期間を指定）' };
+    }
+    return { valid: true, message: '' };
+  }
+
+  function includesDate(date, period) {
+    if (!period) return true;
+    var monthDay = date.slice(5, 10);
+    return monthDay >= period.start && monthDay <= period.end;
+  }
+
+  function periodBounds(period) {
+    function commonDate(value) {
+      var parts = value.split('-').map(Number);
+      return new Date(2000, parts[0] - 1, parts[1]);
+    }
+    var end = commonDate(period ? period.end : '12-31');
+    if (period) end.setHours(23, 59, 59, 999);
+    return { start: commonDate(period ? period.start : '01-01'), end: end };
+  }
+
   return {
     extractAvailableYears: extractAvailableYears,
     defaultYears: defaultYears,
     reconcileYears: reconcileYears,
     addYear: addYear,
-    removeYear: removeYear
+    removeYear: removeYear,
+    isGap: isGap,
+    validatePeriod: validatePeriod,
+    includesDate: includesDate,
+    periodBounds: periodBounds
   };
 })();
 
@@ -755,6 +799,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var NORMAL_BAND_LINE_LIGHT = 'rgba(60, 85, 105, 0.85)';
   var NORMAL_BAND_LINE_DARK = 'rgba(205, 220, 232, 0.85)';
   var NORMAL_BAND_STORAGE_KEY = 'watertemp_yearly_normal_band';
+  var NORMAL_MEAN_STORAGE_KEY = 'watertemp_yearly_normal_mean';
 
   // ---- アプリ状態 ----
   var stationsConfig = [];         // config/stations.json の series 配列
@@ -776,6 +821,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var yearlyChartRendered = false;
   var selectedYearlyYears = [];
   var yearlyYearsInitialized = false;
+  var currentYearlyPeriod = null; // 再読み込み時は通年へ戻す（各年共通の月日範囲）
   var darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
@@ -2401,6 +2447,7 @@ if (typeof module !== 'undefined' && module.exports) {
     var yearCount = NormalBandLogic.countYears(entry.records);
     var available = yearCount >= NormalBandLogic.MIN_YEARS_FOR_BAND;
     checkbox.disabled = !available;
+    document.getElementById('yearly-normal-mean').disabled = !available;
     if (note) {
       note.textContent = available
         ? ''
@@ -2410,22 +2457,22 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // 平年値バンドの表示可否(チェック状態)をlocalStorageから復元する。
   // 未保存時は既定値のON(true)を返す。
-  function loadNormalBandPref() {
+  function loadNormalBandPref(key) {
     var storage = getLocalStorage();
     if (!storage) return true;
     try {
-      var value = storage.getItem(NORMAL_BAND_STORAGE_KEY);
+      var value = storage.getItem(key || NORMAL_BAND_STORAGE_KEY);
       return value === null ? true : value === '1';
     } catch (err) {
       return true;
     }
   }
 
-  function saveNormalBandPref(checked) {
+  function saveNormalBandPref(checked, key) {
     var storage = getLocalStorage();
     if (!storage) return;
     try {
-      storage.setItem(NORMAL_BAND_STORAGE_KEY, checked ? '1' : '0');
+      storage.setItem(key || NORMAL_BAND_STORAGE_KEY, checked ? '1' : '0');
     } catch (err) {
       // 保存領域が使えない環境では黙って無視する
     }
@@ -2442,23 +2489,54 @@ if (typeof module !== 'undefined' && module.exports) {
     };
   }
 
-  // 日付が連続しない(欠測)箇所では折れ線を繋がないよう、
-  // 隙間にy=nullの点を挿入する(spanGaps:falseと組み合わせて使う)。
-  // points は同一年内でx(日付)昇順に並んでいる前提。
-  function withYearlyGapBreaks(points) {
-    if (!points.length) return points;
-    var result = [points[0]];
-    for (var i = 1; i < points.length; i++) {
-      var prevDate = parseDate(points[i - 1].origDate);
-      var curDate = parseDate(points[i].origDate);
-      var diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / 86400000);
-      if (diffDays > 1) {
-        var midDate = new Date(prevDate.getTime() + (curDate.getTime() - prevDate.getTime()) / 2);
-        result.push({ x: toCommonYearDate(midDate), y: null });
-      }
-      result.push(points[i]);
+  function yearlySegments(width) {
+    function gap(context) {
+      var points = context.chart.data.datasets[context.datasetIndex].data;
+      return YearlyComparisonLogic.isGap(points[context.p0DataIndex], points[context.p1DataIndex]);
     }
-    return result;
+    return {
+      borderDash: function (context) { return gap(context) ? [3, 3] : []; },
+      borderWidth: function (context) { return gap(context) ? 0.75 : width; }
+    };
+  }
+
+  function initYearlyPeriodControls() {
+    ['start', 'end'].forEach(function (side) {
+      var month = document.getElementById('yearly-period-' + side + '-month');
+      var day = document.getElementById('yearly-period-' + side + '-day');
+      for (var m = 1; m <= 12; m++) {
+        month.add(new Option(m + '月', String(m).padStart(2, '0')));
+      }
+      for (var d = 1; d <= 31; d++) {
+        day.add(new Option(d + '日', String(d).padStart(2, '0')));
+      }
+      month.value = side === 'start' ? '01' : '12';
+      day.value = side === 'start' ? '01' : '31';
+    });
+    var status = document.getElementById('yearly-period-status');
+    document.getElementById('yearly-period-apply').addEventListener('click', function () {
+      function read(side) {
+        return document.getElementById('yearly-period-' + side + '-month').value + '-' +
+          document.getElementById('yearly-period-' + side + '-day').value;
+      }
+      var period = { start: read('start'), end: read('end') };
+      var validation = YearlyComparisonLogic.validatePeriod(period.start, period.end);
+      status.classList.toggle('error', !validation.valid);
+      if (!validation.valid) {
+        status.textContent = validation.message;
+        return;
+      }
+      currentYearlyPeriod = period;
+      renderYearlyChart();
+    });
+    document.getElementById('yearly-period-reset').addEventListener('click', function () {
+      currentYearlyPeriod = null;
+      document.getElementById('yearly-period-start-month').value = '01';
+      document.getElementById('yearly-period-start-day').value = '01';
+      document.getElementById('yearly-period-end-month').value = '12';
+      document.getElementById('yearly-period-end-day').value = '31';
+      renderYearlyChart();
+    });
   }
 
   function currentYearlyEntry() {
@@ -2594,7 +2672,14 @@ if (typeof module !== 'undefined' && module.exports) {
       saveNormalBandPref(normalBandCheckbox.checked);
       renderYearlyChart();
     });
+    var normalMeanCheckbox = document.getElementById('yearly-normal-mean');
+    normalMeanCheckbox.checked = loadNormalBandPref(NORMAL_MEAN_STORAGE_KEY);
+    normalMeanCheckbox.addEventListener('change', function () {
+      saveNormalBandPref(normalMeanCheckbox.checked, NORMAL_MEAN_STORAGE_KEY);
+      renderYearlyChart();
+    });
 
+    initYearlyPeriodControls();
     handleYearlySeriesChange();
   }
 
@@ -2607,12 +2692,28 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     var entry = seriesData[seriesId];
     prepareYearlyEntry(entry);
+    var bounds = YearlyComparisonLogic.periodBounds(currentYearlyPeriod);
+    var shortPeriod = bounds.end - bounds.start < 93 * 86400000;
+    function inPeriod(record) { return YearlyComparisonLogic.includesDate(record.date, currentYearlyPeriod); }
+    var periodStatus = document.getElementById('yearly-period-status');
+    var hasData = selectedYearlyYears.some(function (year) {
+      return (entry.yearlyRecordsByYear[year] || []).some(inPeriod);
+    });
+    periodStatus.classList.remove('error');
+    periodStatus.textContent = currentYearlyPeriod
+      ? '各年の ' + currentYearlyPeriod.start.replace('-', '/') + '〜' + currentYearlyPeriod.end.replace('-', '/') + ' を比較中'
+      : '各年の同じ月日を比較します（現在は通年表示）。';
+    if (!hasData) periodStatus.textContent += ' 選択した年・期間に観測データがありません。';
     var showAllYears = document.getElementById('yearly-show-all').checked;
     var datasets = [];
 
     var normalBandCheckbox = document.getElementById('yearly-normal-band');
-    if (normalBandCheckbox && normalBandCheckbox.checked && !normalBandCheckbox.disabled) {
+    var normalMeanCheckbox = document.getElementById('yearly-normal-mean');
+    var showBand = normalBandCheckbox.checked && !normalBandCheckbox.disabled;
+    var showMean = normalMeanCheckbox.checked && !normalMeanCheckbox.disabled;
+    if (showBand || showMean) {
       var band = prepareNormalBand(entry);
+      if (band) band = band.filter(function (point) { return point.x >= bounds.start && point.x <= bounds.end; });
       if (band) {
         var minPoints = band.map(function (b) { return { x: b.x, y: b.min }; });
         var maxPoints = band.map(function (b) { return { x: b.x, y: b.max }; });
@@ -2621,51 +2722,58 @@ if (typeof module !== 'undefined' && module.exports) {
         var bandLineColor = isDarkMode ? NORMAL_BAND_LINE_DARK : NORMAL_BAND_LINE_LIGHT;
 
         // 最小値のデータセット(不可視。次のデータセットのfill基準線として使う)
-        datasets.push({
-          label: '平年範囲(最小・内部用)',
-          data: minPoints,
-          type: 'line',
-          showLine: true,
-          fill: false,
-          borderWidth: 0,
-          pointRadius: 0,
-          pointHitRadius: 0,
-          spanGaps: true,
-          tension: 0,
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          _hideFromLegend: true
-        });
-        // 最大値のデータセット(直前の最小値データセットとの間を塗って範囲バンドにする)
-        datasets.push({
-          label: '過去の最大・最小範囲',
-          data: maxPoints,
-          type: 'line',
-          showLine: true,
-          fill: '-1',
-          borderWidth: 0,
-          pointRadius: 0,
-          pointHitRadius: 0,
-          spanGaps: true,
-          tension: 0,
-          borderColor: 'transparent',
-          backgroundColor: bandFillColor
-        });
+        if (showBand) {
+          datasets.push({
+            label: '平年範囲(最小・内部用)',
+            data: minPoints,
+            type: 'line',
+            showLine: true,
+            fill: false,
+            borderWidth: 0,
+            pointRadius: 0,
+            pointHitRadius: 0,
+            spanGaps: true,
+            tension: 0,
+            borderColor: 'transparent',
+            backgroundColor: 'transparent',
+            _normalBand: true,
+            _hideFromLegend: true
+          });
+          // 直前の最小値データセットとの間を塗って範囲バンドにする。
+          datasets.push({
+            label: '過去の最大・最小範囲',
+            data: maxPoints,
+            type: 'line',
+            showLine: true,
+            fill: '-1',
+            borderWidth: 0,
+            pointRadius: 0,
+            pointHitRadius: 0,
+            spanGaps: true,
+            tension: 0,
+            borderColor: 'transparent',
+            backgroundColor: bandFillColor,
+            _normalBand: true
+          });
+        }
         // 平均値の細い実線
-        datasets.push({
-          label: '平均値',
-          data: meanPoints,
-          type: 'line',
-          showLine: true,
-          fill: false,
-          borderWidth: narrowScreenMedia.matches ? 1 : 1.5,
-          pointRadius: 0,
-          pointHitRadius: 0,
-          spanGaps: true,
-          tension: 0.15,
-          borderColor: bandLineColor,
-          backgroundColor: bandLineColor
-        });
+        if (showMean) {
+          datasets.push({
+            label: '平均値',
+            data: meanPoints,
+            type: 'line',
+            showLine: true,
+            fill: false,
+            borderWidth: narrowScreenMedia.matches ? 1 : 1.5,
+            pointRadius: 0,
+            pointHitRadius: 0,
+            spanGaps: true,
+            tension: 0.15,
+            borderColor: bandLineColor,
+            backgroundColor: bandLineColor,
+            _normalMean: true
+          });
+        }
       }
     }
 
@@ -2676,11 +2784,9 @@ if (typeof module !== 'undefined' && module.exports) {
       var bgLegendShown = false;
       entry.availableYears.forEach(function (year) {
         if (selectedYearlyYears.indexOf(year) !== -1) return;
-        var bgPoints = withYearlyGapBreaks(
-          entry.yearlyRecordsByYear[year].map(function (record) {
-            return yearlyPoint(record, year);
-          })
-        );
+        var bgPoints = entry.yearlyRecordsByYear[year].filter(inPeriod).map(function (record) {
+          return yearlyPoint(record, year);
+        });
         var bgColor = isDarkMode ? YEARLY_BG_DARK : YEARLY_BG_LIGHT;
         datasets.push({
           label: 'その他の年',
@@ -2691,6 +2797,7 @@ if (typeof module !== 'undefined' && module.exports) {
           pointRadius: 0,
           pointHitRadius: 0,
           borderWidth: 1,
+          segment: yearlySegments(1),
           tension: 0.2,
           backgroundColor: bgColor,
           borderColor: bgColor,
@@ -2702,21 +2809,20 @@ if (typeof module !== 'undefined' && module.exports) {
 
     selectedYearlyYears.forEach(function (year, index) {
       var color = yearlyColor(index);
-      var points = withYearlyGapBreaks(
-        (entry.yearlyRecordsByYear[year] || []).map(function (record) {
-          return yearlyPoint(record, year);
-        })
-      );
+      var points = (entry.yearlyRecordsByYear[year] || []).filter(inPeriod).map(function (record) {
+        return yearlyPoint(record, year);
+      });
       datasets.push({
         label: year + '年',
         data: points,
         type: 'line',
         showLine: true,
         spanGaps: false,
-        pointRadius: 0,
+        pointRadius: points.length === 1 ? 2 : 0,
         pointHitRadius: 6,
         pointHoverRadius: 4,
         borderWidth: narrowScreenMedia.matches ? 1 : 2,
+        segment: yearlySegments(narrowScreenMedia.matches ? 1 : 2),
         tension: 0.2,
         backgroundColor: color,
         borderColor: color
@@ -2744,6 +2850,26 @@ if (typeof module !== 'undefined' && module.exports) {
       color: chartTheme().text,
       font: { size: 14, weight: '600' }
     };
+    // バンドの上下境界は一組で切替。平均値と年別系列には影響させない。
+    chartPlugins.legend.onClick = function (event, item, legend) {
+      var chart = legend.chart;
+      var dataset = chart.data.datasets[item.datasetIndex];
+      var visible = !chart.isDatasetVisible(item.datasetIndex);
+      if (dataset._normalBand || dataset._normalMean) {
+        chart.data.datasets.forEach(function (candidate, index) {
+          if ((dataset._normalBand && candidate._normalBand) ||
+              (dataset._normalMean && candidate._normalMean)) {
+            chart.setDatasetVisibility(index, visible);
+          }
+        });
+        var checkbox = dataset._normalBand ? normalBandCheckbox : normalMeanCheckbox;
+        checkbox.checked = visible;
+        saveNormalBandPref(visible, dataset._normalBand ? NORMAL_BAND_STORAGE_KEY : NORMAL_MEAN_STORAGE_KEY);
+      } else {
+        chart.setDatasetVisibility(item.datasetIndex, visible);
+      }
+      chart.update();
+    };
 
     var config = {
       type: 'scatter',
@@ -2757,15 +2883,19 @@ if (typeof module !== 'undefined' && module.exports) {
         scales: {
           x: themedScale({
             type: 'time',
-            time: { unit: 'month' },
-            min: new Date(2000, 0, 1),
-            max: new Date(2000, 11, 31),
-            afterBuildTicks: keepOddMonthTicks,
+            time: { unit: shortPeriod ? 'day' : 'month' },
+            min: bounds.start,
+            max: bounds.end,
+            afterBuildTicks: shortPeriod || currentYearlyPeriod ? undefined : keepOddMonthTicks,
             ticks: {
               // ダミー年(2000)は表示せず「1月」「3月」…奇数月のみ表示する
               maxRotation: 0,
               minRotation: 0,
-              callback: monthOnlyTickLabel
+              maxTicksLimit: narrowScreenMedia.matches ? 5 : 9,
+              callback: shortPeriod ? function (value) {
+                var date = new Date(value);
+                return (date.getMonth() + 1) + '/' + date.getDate();
+              } : monthOnlyTickLabel
             },
             title: { display: true, text: '月日' }
           }),
