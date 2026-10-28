@@ -6,6 +6,35 @@ var layout = appLogic.CardLayoutLogic;
 var colorPrefs = appLogic.SeriesColorPreferenceLogic;
 var latestCards = appLogic.LatestCardLogic;
 var dateRanges = appLogic.DateRangeLogic;
+var comparisonPrefs = appLogic.ComparisonPreferenceLogic;
+
+var preferenceDefaults = { mode: 'timeseries', seriesId: null, years: null, period: null };
+assert.deepEqual(comparisonPrefs.load(null), preferenceDefaults);
+assert.deepEqual(comparisonPrefs.normalize({ mode: 'invalid', period: { start: ['06-01'], end: '09-30' } }), preferenceDefaults);
+assert.deepEqual(comparisonPrefs.normalize({ period: { start: '09-30', end: '06-01' } }), preferenceDefaults);
+assert.deepEqual(comparisonPrefs.normalize({ years: [2024, '2025', 2024, null, 2026, 10000] }).years, [2024, 2026]);
+assert.deepEqual(comparisonPrefs.normalize({ years: [] }).years, []);
+var prefValue = null;
+var prefStorage = {
+  getItem: function () { return prefValue; },
+  setItem: function (key, value) {
+    assert.equal(key, comparisonPrefs.STORAGE_KEY);
+    prefValue = value;
+  }
+};
+var savedComparison = { mode: 'yearly', seriesId: 'sea_area138', years: [2023, 2021], period: { start: '06-01', end: '09-30' } };
+comparisonPrefs.save(prefStorage, savedComparison);
+assert.deepEqual(comparisonPrefs.load(prefStorage), savedComparison);
+prefValue = 'invalid json';
+assert.deepEqual(comparisonPrefs.load(prefStorage), preferenceDefaults);
+prefValue = 'null';
+assert.deepEqual(comparisonPrefs.load(prefStorage), preferenceDefaults);
+var deniedStorage = {
+  getItem: function () { throw new Error('denied'); },
+  setItem: function () { throw new Error('denied'); }
+};
+assert.deepEqual(comparisonPrefs.load(deniedStorage), preferenceDefaults);
+assert.doesNotThrow(function () { comparisonPrefs.save(deniedStorage, savedComparison); });
 
 assert.equal(appLogic.isGap({ origDate: '2025-01-01' }, { origDate: '2025-01-02' }), false);
 assert.equal(appLogic.isGap({ origDate: '2025-01-01' }, { origDate: '2025-01-03' }), true);
@@ -141,4 +170,4 @@ assert.equal(
   false
 );
 
-console.log('YearlyComparisonLogic / CardLayoutLogic / SeriesColorPreferenceLogic / LatestCardLogic / DateRangeLogic tests OK');
+console.log('ComparisonPreferenceLogic / YearlyComparisonLogic / CardLayoutLogic / SeriesColorPreferenceLogic / LatestCardLogic / DateRangeLogic tests OK');
