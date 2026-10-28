@@ -101,6 +101,40 @@ var YearlyComparisonLogic = (function () {
   };
 })();
 
+// 再訪時に復元する比較状態。壊れた保存データや保存不可の環境でも動作を続ける。
+var ComparisonPreferenceLogic = (function () {
+  'use strict';
+  var STORAGE_KEY = 'watertemp_comparison_view';
+
+  function normalize(value) {
+    value = value && typeof value === 'object' ? value : {};
+    var period = value.period;
+    var validPeriod = period && typeof period.start === 'string' && typeof period.end === 'string' &&
+      YearlyComparisonLogic.validatePeriod(period.start, period.end).valid;
+    var years = Array.isArray(value.years) ? value.years.filter(function (year, index, list) {
+      return Number.isInteger(year) && year >= 1900 && year <= 9999 && list.indexOf(year) === index;
+    }) : null;
+    return {
+      mode: value.mode === 'yearly' ? 'yearly' : 'timeseries',
+      seriesId: typeof value.seriesId === 'string' ? value.seriesId : null,
+      years: years,
+      period: validPeriod ? { start: period.start, end: period.end } : null
+    };
+  }
+
+  function load(storage) {
+    try { return normalize(storage ? JSON.parse(storage.getItem(STORAGE_KEY)) : null); }
+    catch (err) { return normalize(null); }
+  }
+
+  function save(storage, value) {
+    try { if (storage) storage.setItem(STORAGE_KEY, JSON.stringify(normalize(value))); }
+    catch (err) { /* 保存不可でも現在の画面はそのまま利用できる */ }
+  }
+
+  return { STORAGE_KEY: STORAGE_KEY, normalize: normalize, load: load, save: save };
+})();
+
 // 表示期間の計算と境界フィルタはDOMに依存させず、Nodeでも検証可能にする。
 var DateRangeLogic = (function () {
   'use strict';
@@ -775,6 +809,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.NormalBandLogic = NormalBandLogic;
   module.exports.CardLayoutLogic = CardLayoutLogic;
   module.exports.LatestCardLogic = LatestCardLogic;
+  module.exports.ComparisonPreferenceLogic = ComparisonPreferenceLogic;
 }
 
 (function () {
@@ -822,7 +857,8 @@ if (typeof module !== 'undefined' && module.exports) {
   var yearlyChartRendered = false;
   var selectedYearlyYears = [];
   var yearlyYearsInitialized = false;
-  var currentYearlyPeriod = null; // 再読み込み時は通年へ戻す（各年共通の月日範囲）
+  var currentYearlyPeriod = null; // 各年共通の月日範囲。通年に戻すまで保存・復元する。
+  var comparisonPreferences = null;
   var darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
@@ -2409,6 +2445,16 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // ---- 年比較モード ----
 
+  function saveComparisonPreferences() {
+    var select = document.getElementById('yearly-series-select');
+    ComparisonPreferenceLogic.save(getLocalStorage(), {
+      mode: currentMode,
+      seriesId: select ? select.value : null,
+      years: selectedYearlyYears,
+      period: currentYearlyPeriod
+    });
+  }
+
   // 任意の日付を共通年(2000年、うるう年)にマップする。2/29もそのまま扱える。
   function toCommonYearDate(date) {
     return new Date(2000, date.getMonth(), date.getDate());
@@ -2511,8 +2557,9 @@ if (typeof module !== 'undefined' && module.exports) {
       for (var d = 1; d <= 31; d++) {
         day.add(new Option(d + '日', String(d).padStart(2, '0')));
       }
-      month.value = side === 'start' ? '01' : '12';
-      day.value = side === 'start' ? '01' : '31';
+      var restored = currentYearlyPeriod && currentYearlyPeriod[side].split('-');
+      month.value = restored ? restored[0] : (side === 'start' ? '01' : '12');
+      day.value = restored ? restored[1] : (side === 'start' ? '01' : '31');
     });
     var status = document.getElementById('yearly-period-status');
     document.getElementById('yearly-period-apply').addEventListener('click', function () {
@@ -2528,10 +2575,12 @@ if (typeof module !== 'undefined' && module.exports) {
         return;
       }
       currentYearlyPeriod = period;
+      saveComparisonPreferences();
       renderYearlyChart();
     });
     document.getElementById('yearly-period-reset').addEventListener('click', function () {
       currentYearlyPeriod = null;
+      saveComparisonPreferences();
       document.getElementById('yearly-period-start-month').value = '01';
       document.getElementById('yearly-period-start-day').value = '01';
       document.getElementById('yearly-period-end-month').value = '12';
@@ -2600,10 +2649,9 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!entry) return;
     prepareYearlyEntry(entry);
     if (!yearlyYearsInitialized) {
-      selectedYearlyYears = YearlyComparisonLogic.defaultYears(
-        entry.availableYears,
-        new Date().getFullYear()
-      );
+      selectedYearlyYears = comparisonPreferences && comparisonPreferences.years !== null
+        ? YearlyComparisonLogic.reconcileYears(comparisonPreferences.years, entry.availableYears)
+        : YearlyComparisonLogic.defaultYears(entry.availableYears, new Date().getFullYear());
       yearlyYearsInitialized = true;
     } else {
       selectedYearlyYears = YearlyComparisonLogic.reconcileYears(
@@ -2619,6 +2667,8 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 
   function buildYearlySelect() {
+    comparisonPreferences = ComparisonPreferenceLogic.load(getLocalStorage());
+    currentYearlyPeriod = comparisonPreferences.period;
     var select = document.getElementById('yearly-series-select');
     select.innerHTML = '';
 
@@ -2640,7 +2690,13 @@ if (typeof module !== 'undefined' && module.exports) {
       select.appendChild(optgroup);
     });
 
-    select.addEventListener('change', handleYearlySeriesChange);
+    if (loadedIds.indexOf(comparisonPreferences.seriesId) !== -1) {
+      select.value = comparisonPreferences.seriesId;
+    }
+    select.addEventListener('change', function () {
+      handleYearlySeriesChange();
+      saveComparisonPreferences();
+    });
 
     document.getElementById('yearly-add-button').addEventListener('click', function () {
       var entry = currentYearlyEntry();
@@ -2652,6 +2708,7 @@ if (typeof module !== 'undefined' && module.exports) {
         entry.availableYears
       );
       syncYearlyControls(entry);
+      saveComparisonPreferences();
       renderYearlyChart();
     });
     document.getElementById('yearly-selected-years').addEventListener('click', function (event) {
@@ -2663,6 +2720,7 @@ if (typeof module !== 'undefined' && module.exports) {
         Number(button.dataset.year)
       );
       syncYearlyControls(entry);
+      saveComparisonPreferences();
       renderYearlyChart();
     });
     document.getElementById('yearly-show-all').addEventListener('change', renderYearlyChart);
@@ -2931,8 +2989,9 @@ if (typeof module !== 'undefined' && module.exports) {
     var tsPanel = document.getElementById('panel-timeseries');
     var yPanel = document.getElementById('panel-yearly');
 
-    function activate(mode) {
+    function activate(mode, persist) {
       currentMode = mode;
+      if (persist) saveComparisonPreferences();
       var isTs = mode === 'timeseries';
       tsTab.classList.toggle('active', isTs);
       yTab.classList.toggle('active', !isTs);
@@ -2950,8 +3009,9 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     }
 
-    tsTab.addEventListener('click', function () { activate('timeseries'); });
-    yTab.addEventListener('click', function () { activate('yearly'); });
+    tsTab.addEventListener('click', function () { activate('timeseries', true); });
+    yTab.addEventListener('click', function () { activate('yearly', true); });
+    activate(comparisonPreferences ? comparisonPreferences.mode : currentMode, false);
   }
 
   // ---- 初期化 ----
