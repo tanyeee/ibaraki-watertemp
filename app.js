@@ -2561,6 +2561,25 @@ if (typeof module !== 'undefined' && module.exports) {
       month.value = restored ? restored[0] : (side === 'start' ? '01' : '12');
       day.value = restored ? restored[1] : (side === 'start' ? '01' : '31');
     });
+    var endMonth = document.getElementById('yearly-period-end-month');
+    var endDay = document.getElementById('yearly-period-end-day');
+    var previousEndMonth = Number(endMonth.value);
+    function updateEndDays(followMonthEnd) {
+      // 共通年は2000年。2/29を含めることで、うるう年の測定値も月末まで比較できる。
+      var lastDay = new Date(2000, Number(endMonth.value), 0).getDate();
+      var previousLastDay = new Date(2000, previousEndMonth, 0).getDate();
+      var selectedDay = Number(endDay.value);
+      var nextDay = followMonthEnd && selectedDay === previousLastDay
+        ? lastDay : Math.min(selectedDay, lastDay);
+      endDay.innerHTML = '';
+      for (var day = 1; day <= lastDay; day++) {
+        endDay.add(new Option(day + '日', String(day).padStart(2, '0')));
+      }
+      endDay.value = String(nextDay).padStart(2, '0');
+      previousEndMonth = Number(endMonth.value);
+    }
+    updateEndDays(false);
+    endMonth.addEventListener('change', function () { updateEndDays(true); });
     var status = document.getElementById('yearly-period-status');
     document.getElementById('yearly-period-apply').addEventListener('click', function () {
       function read(side) {
@@ -2584,6 +2603,7 @@ if (typeof module !== 'undefined' && module.exports) {
       document.getElementById('yearly-period-start-month').value = '01';
       document.getElementById('yearly-period-start-day').value = '01';
       document.getElementById('yearly-period-end-month').value = '12';
+      updateEndDays(false);
       document.getElementById('yearly-period-end-day').value = '31';
       renderYearlyChart();
     });
