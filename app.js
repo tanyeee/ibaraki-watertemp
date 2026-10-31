@@ -2661,6 +2661,11 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     syncYearlyControls(entry);
     updateNormalBandControl(entry);
+    var manual = entry.config.kind === 'tapwater';
+    var markerCheckbox = document.getElementById('yearly-show-markers');
+    markerCheckbox.checked = manual || loadYearlyTogglePref(YEARLY_MARKERS_STORAGE_KEY, false);
+    markerCheckbox.disabled = manual;
+    document.getElementById('yearly-marker-note').hidden = !manual;
     if (currentMode === 'yearly' || yearlyChartRendered) {
       renderYearlyChart();
     }
@@ -2771,6 +2776,7 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!hasData) periodStatus.textContent += ' 選択した年・期間に観測データがありません。';
     var showAllYears = document.getElementById('yearly-show-all').checked;
     var showMarkers = document.getElementById('yearly-show-markers').checked;
+    var manualMeasurements = entry.config.kind === 'tapwater';
     var datasets = [];
 
     var normalBandCheckbox = document.getElementById('yearly-normal-band');
@@ -2884,10 +2890,12 @@ if (typeof module !== 'undefined' && module.exports) {
         type: 'line',
         showLine: true,
         spanGaps: false,
-        pointRadius: showMarkers || points.length === 1 ? 2 : 0,
-        pointBorderWidth: 0,
+        pointRadius: manualMeasurements ? 3.5 : (showMarkers || points.length === 1 ? 1.5 : 0),
+        pointBorderWidth: manualMeasurements ? 1 : 0,
+        pointBorderColor: isDarkMode ? '#1b2229' : '#ffffff',
+        pointBackgroundColor: color,
         pointHitRadius: 6,
-        pointHoverRadius: 4,
+        pointHoverRadius: manualMeasurements ? 5 : 4,
         borderWidth: narrowScreenMedia.matches ? 1 : 2,
         segment: yearlySegments(narrowScreenMedia.matches ? 1 : 2),
         tension: 0.2,
