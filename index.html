@@ -217,7 +217,7 @@
       <p id="yearly-year-help" class="control-help">初期表示は直近3年。過去の年を必要な分だけ追加できます。</p>
       <div id="yearly-selected-years" class="year-chips" aria-label="表示中の年" aria-live="polite"></div>
       <label class="yearly-background-toggle">
-        <input type="checkbox" id="yearly-show-markers">
+        <input type="checkbox" id="yearly-show-markers" aria-describedby="yearly-marker-note">
         <span>マーカー＋線で表示</span>
       </label>
       <label class="yearly-background-toggle">
@@ -233,6 +233,7 @@
         <span>平均値を表示</span>
       </label>
       <span id="yearly-normal-band-note" class="control-help yearly-normal-band-note"></span>
+      <p id="yearly-marker-note" class="control-help" hidden>水道水の測定日は大きめのマーカーで常に表示します。破線の区間は未測定です。</p>
     </div>
   </section>
 
