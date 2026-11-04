@@ -188,6 +188,22 @@
     font-size: 0.85rem;
     color: var(--color-error);
   }
+  button:disabled { opacity: 0.55; cursor: default; }
+  .secondary-button {
+    min-height: 44px;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-control);
+    color: var(--color-text);
+    font: inherit;
+    cursor: pointer;
+  }
+  summary { cursor: pointer; min-height: 44px; padding: 8px 0; font-weight: 600; }
+  .help a, .status-text a { color: var(--color-accent); }
+  .status-text { overflow-wrap: anywhere; }
+  .status-text.error { color: var(--color-error); }
+  input[type="password"] { min-width: 0; }
 </style>
 <script>
 (function () {
@@ -225,6 +241,29 @@
     <a class="back-link" href="index.html">&larr; グラフを見る</a>
     <h1>水温を記録する</h1>
 
+    <details id="token-settings" class="card">
+      <summary>登録用トークンの設定 <span id="token-state" class="unit-hint"></span></summary>
+      <div class="help">
+        <p>初回だけ、所有者（tanyeee）のGitHubアカウントで専用トークンを発行してください。</p>
+        <ol>
+          <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Fine-grained tokenの作成画面</a>を開く。</li>
+          <li>Resource ownerは「tanyeee」、Repository accessは「Only select repositories」で「ibaraki-watertemp」だけを選ぶ。</li>
+          <li>Repository permissionsの「Issues」を「Read and write」にする。Contentsなど他の書き込み権限は不要です。</li>
+          <li>有効期限を設定して発行し、下に貼り付ける。期限が切れたら再設定してください。</li>
+        </ol>
+        <p>保存先はこのブラウザ内です。公開コードには保存しません。同じサイトのスクリプトからは読み出せるため、共有端末では保存しないでください。</p>
+      </div>
+      <form id="token-form">
+        <div>
+          <label for="token-input">専用トークン</label>
+          <input type="password" id="token-input" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="github_pat_…" required>
+        </div>
+        <button type="submit">確認してこの端末に保存</button>
+        <button type="button" id="token-forget" class="secondary-button">保存したトークンを削除</button>
+        <p id="token-status" class="status-text" role="status" aria-live="polite"></p>
+      </form>
+    </details>
+
     <div class="card">
       <form id="temp-form">
         <div>
@@ -233,25 +272,25 @@
         </div>
         <div>
           <label for="value-input">水温<span class="unit-hint">(°C)</span></label>
-          <input type="number" id="value-input" name="value" step="0.1" inputmode="decimal" required>
+          <input type="number" id="value-input" name="value" min="-5" max="45" step="0.1" inputmode="decimal" required>
         </div>
         <div>
           <label for="note-input">備考<span class="unit-hint">(任意)</span></label>
-          <textarea id="note-input" name="note" placeholder="例: 前日に大雨、濁りあり など"></textarea>
+          <textarea id="note-input" name="note" maxlength="1000" placeholder="例: 前日に大雨、濁りあり など"></textarea>
         </div>
-        <p id="status-text" class="status-text"></p>
-        <button type="submit">GitHubで記録する</button>
+        <p id="status-text" class="status-text" role="status" aria-live="polite"></p>
+        <button type="submit" id="register-button">登録</button>
       </form>
     </div>
 
     <div class="card help">
       <strong>使い方</strong>
       <ol>
-        <li>日付と水温を入力して「GitHubで記録する」をタップします。</li>
-        <li>GitHubのIssue作成画面が新しいタブで開くので、内容を確認してそのまま「Submit new issue」をタップします。</li>
-        <li>数分後、自動的にデータが追記されグラフに反映されます(Issueはコメントの上で自動クローズされます)。</li>
+        <li>初回だけ登録用トークンを設定します。</li>
+        <li>日付と水温を入力して「登録」をタップすると、この画面から送信されます。</li>
+        <li>「受付完了」が表示されたら、数分後に自動処理でグラフへ反映されます。同じ日付の値は上書きされます。</li>
       </ol>
-      GitHubへのログインが必要です(リポジトリオーナーのみ記録可能)。
+      <p><a href="https://github.com/tanyeee/ibaraki-watertemp/issues?q=is%3Aissue%20author%3Atanyeee%20temp%3A%20sort%3Acreated-desc" target="_blank" rel="noopener noreferrer">記録の受付・処理状況を確認する</a></p>
     </div>
   </div>
 </main>
@@ -307,77 +346,6 @@
 })();
 </script>
 
-<script>
-(function () {
-  var REPO_URL = "https://github.com/tanyeee/ibaraki-watertemp";
-  var STORAGE_KEY = "tapwater_last_value";
-
-  var form = document.getElementById("temp-form");
-  var dateInput = document.getElementById("date-input");
-  var valueInput = document.getElementById("value-input");
-  var noteInput = document.getElementById("note-input");
-  var statusText = document.getElementById("status-text");
-
-  function todayJst() {
-    // JST(UTC+9)基準の「今日」をYYYY-MM-DD形式で返す
-    var now = new Date();
-    var jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    var y = jst.getUTCFullYear();
-    var m = String(jst.getUTCMonth() + 1).padStart(2, "0");
-    var d = String(jst.getUTCDate()).padStart(2, "0");
-    return y + "-" + m + "-" + d;
-  }
-
-  dateInput.value = todayJst();
-
-  var lastValue = null;
-  try {
-    lastValue = window.localStorage.getItem(STORAGE_KEY);
-  } catch (e) {
-    lastValue = null;
-  }
-  if (lastValue) {
-    valueInput.placeholder = "前回: " + lastValue + "°C";
-  }
-
-  form.addEventListener("submit", function (ev) {
-    ev.preventDefault();
-    statusText.textContent = "";
-
-    var dateStr = dateInput.value;
-    var valueStr = valueInput.value;
-    var note = noteInput.value.trim();
-
-    if (!dateStr) {
-      statusText.textContent = "日付を入力してください。";
-      return;
-    }
-    if (valueStr === "" || isNaN(Number(valueStr))) {
-      statusText.textContent = "水温を数値で入力してください。";
-      return;
-    }
-
-    var value = Number(valueStr);
-    var title = "temp: " + dateStr + " " + value;
-    var body = note ? ("note: " + note) : "";
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, String(value));
-    } catch (e) {
-      // localStorageが使えない環境では無視
-    }
-
-    var issueUrl =
-      REPO_URL +
-      "/issues/new?title=" +
-      encodeURIComponent(title) +
-      "&body=" +
-      encodeURIComponent(body);
-
-    window.open(issueUrl, "_blank", "noopener");
-    statusText.textContent = "GitHubのIssue作成画面を開きました。内容を確認して送信してください。";
-  });
-})();
-</script>
+<script src="input.js"></script>
 </body>
 </html>

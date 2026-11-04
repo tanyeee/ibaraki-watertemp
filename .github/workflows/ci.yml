@@ -24,10 +24,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Check JavaScript syntax
-        run: node --check app.js
+        run: |
+          node --check app.js
+          node --check input.js
 
       - name: Run JavaScript tests
-        run: node tests/test_app_logic.js
+        run: |
+          node tests/test_app_logic.js
+          node tests/test_input_logic.js
 
       - name: Run Python tests
         run: python -m unittest discover -s tests -v
