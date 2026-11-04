@@ -183,11 +183,23 @@ a {
   gap: 8px;
 }
 
-/* 展開時に出す全カード。横スクロールはせず折り返し(wrap)で複数行に表示する。 */
+/* PCの全表示はジャンル別。スマホでは見出しを外して3列へ戻す。 */
 .latest-cards-groups {
   display: none;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+
+.latest-card-group { grid-column: span 3; min-width: 0; }
+.latest-card-group[data-group="海"] { grid-column: span 4; }
+.latest-card-group[data-group="水道水"] { grid-column: span 2; }
+.latest-card-group[data-group="霞ヶ浦"] { grid-column: 1 / -1; }
+.latest-card-group-title { margin: 0 0 8px; font-size: 0.8rem; font-weight: 600; color: var(--color-muted); }
+.latest-card-group-items { display: grid; grid-template-columns: repeat(var(--group-columns), minmax(0, 1fr)); gap: 8px; }
+.card-name-compact { display: none; }
+@media (min-width: 601px) {
+  .latest-card-group .card-name-full { display: none; }
+  .latest-card-group .card-name-compact { display: inline; }
 }
 
 .latest-cards.cards-expanded .latest-cards-featured {
@@ -289,42 +301,40 @@ a {
   border: 1px solid var(--color-border);
   border-left-width: 4px;
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 10px 12px;
   font-size: 0.8rem;
-  min-width: 130px;
+  min-width: 0;
 }
 
 .latest-card .card-name {
   font-weight: 600;
   display: block;
-  margin-bottom: 2px;
-  overflow: hidden;
-  white-space: nowrap;
+  margin-bottom: 4px;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .latest-card .card-value {
-  font-size: 1.1rem;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
 
 .latest-card .card-reading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
 .latest-card .card-date {
   color: var(--color-muted);
   font-size: 0.72rem;
-  margin-left: auto;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.card-date-short {
-  display: none;
+  margin-left: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .latest-card.no-data {
@@ -334,7 +344,7 @@ a {
 
 .latest-card-placeholder {
   min-width: 0;
-  min-height: 52px;
+  min-height: 96px;
   visibility: hidden;
 }
 
@@ -1640,12 +1650,12 @@ main {
   }
   .latest-card {
     min-width: 0;
-    padding: 5px 3px 5px 5px;
+    padding: 8px 5px;
     border-left-width: 3px;
     font-size: 0.68rem;
   }
   .latest-card-placeholder {
-    min-height: 47px;
+    min-height: 92px;
   }
   .card-customizer form {
     padding: 14px;
@@ -1679,24 +1689,21 @@ main {
     flex: 1 1 0;
   }
   .latest-card .card-name {
-    margin-bottom: 1px;
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+    min-height: 2.5em;
     line-height: 1.25;
   }
   .latest-card .card-value {
-    font-size: 0.95rem;
+    font-size: 1.15rem;
     white-space: nowrap;
   }
   .latest-card .card-date {
-    margin-left: auto;
+    margin-left: 0;
     font-size: 0.62rem;
-    white-space: nowrap;
   }
-  .card-date-full {
-    display: none;
-  }
-  .card-date-short {
-    display: inline;
-  }
+  .latest-card-group, .latest-card-group-items { display: contents; }
+  .latest-card-group-title { display: none; }
   .chart-wrap {
     padding: 0 8px 6px;
   }

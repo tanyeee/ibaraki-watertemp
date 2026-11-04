@@ -862,7 +862,6 @@ if (typeof module !== 'undefined' && module.exports) {
   var darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   var narrowScreenMedia = window.matchMedia('(max-width: 600px)');
   var isDarkMode = darkModeMedia.matches;
-  var latestCardResizeFrame = null;
   var customSeriesColors = {};
   var editingSeriesColorId = null;
   var pendingSeriesColor = null;
@@ -1350,12 +1349,20 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   }
 
-  function buildLatestCardElement(station) {
+  function buildLatestCardElement(station, grouped) {
     var entry = seriesData[station.id];
     var latestReading = entry
       ? LatestCardLogic.reading(entry.meta, entry.records, currentJapanDate())
       : null;
     var card = document.createElement('div');
+    var compactName = station.name;
+    if (grouped) {
+      if (station.kind === 'sea') compactName = station.name.replace(' 海面水温', '');
+      else if (station.kind === 'tapwater') compactName = station.name.replace(/^水道水温\((.*)\)$/, '$1');
+      else compactName = station.name.replace(station.group + ' ', '');
+    }
+    var nameHtml = '<span class="card-name"><span class="card-name-full">' + escapeHtml(station.name) +
+      '</span><span class="card-name-compact">' + escapeHtml(compactName) + '</span></span>';
     var cardTextColor = entry && entry.color
       ? CardTextColorLogic.readableSeriesColor(entry.color, isDarkMode)
       : '';
@@ -1364,22 +1371,21 @@ if (typeof module !== 'undefined' && module.exports) {
       card.className = 'latest-card';
       card.style.borderLeftColor = entry.color;
       card.innerHTML =
-        '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
+        nameHtml +
         '<span class="card-reading">' +
           '<span class="card-value">' + latestReading.value.toFixed(1) + '°C</span>' +
-          '<span class="card-date card-date-full">' +
-            escapeHtml(latestReading.fullDate) + '</span>' +
-          '<span class="card-date card-date-short" title="' +
+          '<span class="card-date" title="' +
             escapeHtml(latestReading.fullDate) + '">' +
-            escapeHtml(latestReading.shortDate) + '</span>' +
+            escapeHtml(latestReading.fullDate.replace(
+              new RegExp('^' + currentJapanDate().slice(0, 4) + '-'), ''
+            ).replace(/-/g, '/')) + '</span>' +
         '</span>';
     } else {
       card.className = 'latest-card no-data';
       card.innerHTML =
-        '<span class="card-name">' + escapeHtml(station.name) + '</span>' +
+        nameHtml +
         '<span>データ未取得</span>';
     }
-    card.querySelector('.card-name').style.color = cardTextColor;
     var cardValue = card.querySelector('.card-value');
     if (cardValue) cardValue.style.color = cardTextColor;
     return card;
@@ -1406,15 +1412,26 @@ if (typeof module !== 'undefined' && module.exports) {
     var groupsWrap = document.createElement('div');
     groupsWrap.className = 'latest-cards-groups';
     SeriesSelectionLogic.groupSeries(primaryVisibleStations()).forEach(function (group) {
+      var section = document.createElement('section');
+      section.className = 'latest-card-group';
+      section.dataset.group = group.name;
+      var heading = document.createElement('h2');
+      heading.className = 'latest-card-group-title';
+      heading.textContent = group.name;
+      section.appendChild(heading);
+      var cards = document.createElement('div');
+      cards.className = 'latest-card-group-items';
+      cards.style.setProperty('--group-columns', Math.min(3, group.series.length));
       group.series.forEach(function (station) {
-        groupsWrap.appendChild(buildLatestCardElement(station));
+        cards.appendChild(buildLatestCardElement(station, true));
       });
+      section.appendChild(cards);
+      groupsWrap.appendChild(section);
     });
 
     container.appendChild(featuredWrap);
     container.appendChild(groupsWrap);
 
-    scheduleLatestCardNameSizing();
     updateCardsCollapse();
   }
 
@@ -1596,43 +1613,6 @@ if (typeof module !== 'undefined' && module.exports) {
     });
     closeButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
     cancelButton.addEventListener('click', function () { closeCardCustomizer(dialog); });
-  }
-
-  function resizeLatestCardNames() {
-    var names = Array.prototype.slice.call(
-      document.querySelectorAll('#latest-cards .card-name')
-    );
-    if (!names.length) return;
-
-    names.forEach(function (name) { name.style.fontSize = '10px'; });
-
-    var sampleStyle = window.getComputedStyle(names[0]);
-    var canvas = document.createElement('canvas');
-    var context = canvas.getContext('2d');
-    context.font = sampleStyle.fontStyle + ' ' + sampleStyle.fontWeight +
-      ' 1px ' + sampleStyle.fontFamily;
-
-    var commonSize = names.reduce(function (smallest, name) {
-      var measuredAtOnePixel = context.measureText(name.textContent).width;
-      var availableWidth = name.clientWidth - 1;
-      if (!measuredAtOnePixel || availableWidth <= 0) return smallest;
-      return Math.min(smallest, availableWidth / measuredAtOnePixel);
-    }, 16);
-
-    commonSize = Math.max(10, Math.min(16, commonSize));
-    names.forEach(function (name) {
-      name.style.fontSize = commonSize.toFixed(2) + 'px';
-    });
-  }
-
-  function scheduleLatestCardNameSizing() {
-    if (latestCardResizeFrame !== null) {
-      window.cancelAnimationFrame(latestCardResizeFrame);
-    }
-    latestCardResizeFrame = window.requestAnimationFrame(function () {
-      latestCardResizeFrame = null;
-      resizeLatestCardNames();
-    });
   }
 
   function escapeHtml(str) {
@@ -3158,7 +3138,6 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     currentTsPlotStyle = loadTsPlotStylePref();
     initTsZoomResetButton();
-    window.addEventListener('resize', scheduleLatestCardNameSizing);
     window.addEventListener('resize', updateCardsCollapse);
     updateStatus('データ読み込み中...');
     loadAllData()
