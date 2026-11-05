@@ -1,10 +1,10 @@
-name: update_latest_cards
+name: update_latest_cards (kawabou)
 
 on:
   workflow_dispatch:
   schedule:
-    # 毎時35分。日次更新(21:10 UTC)との同時実行はconcurrencyで避ける。
-    - cron: "35 * * * *"
+    # 毎時23分(川の防災情報は毎正時更新)。日次更新との同時実行はconcurrencyで避ける。
+    - cron: "23 * * * *"
 
 permissions:
   contents: write
@@ -29,22 +29,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Update latest river/lake observations
+      - name: Update river/lake water temperature (kawabou)
         id: update_latest
         run: |
           failures=0
-          station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
-          if [ -z "$station_ids" ]; then
-            echo "no enabled river stations"
+          if ! python scripts/update_kawabou_qwtr.py; then
+            echo "::error::failed to update from kawabou"
+            failures=1
           fi
-          for station_id in $station_ids; do
-            echo "=== updating latest observation for $station_id ==="
-            if ! python scripts/update_latest_wqua.py --station "$station_id"; then
-              echo "::error::failed to update latest observation for $station_id"
-              failures=$((failures + 1))
-            fi
-            sleep 2
-          done
           echo "failures=$failures" >> "$GITHUB_OUTPUT"
 
       - name: Validate generated data
@@ -56,7 +48,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/river
           if ! git diff --cached --quiet; then
-            git commit -m "Update latest water temperature cards"
+            git commit -m "Update river/lake water temperature from kawabou"
             git pull --rebase origin "$GITHUB_REF_NAME"
             git push
           fi

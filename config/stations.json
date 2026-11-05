@@ -1,5 +1,8 @@
 {
-  "mlit_outage": {"active": true, "since": "2026-11-04"},
+  "mlit_outage": {
+    "active": false,
+    "since": "2026-11-04"
+  },
   "series": [
     {
       "id": "sea_area137",
@@ -31,6 +34,7 @@
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303071",
+      "kawabou_code": "2127000600004",
       "path": "data/river/403031283303071.json",
       "enabled": true
     },
@@ -40,6 +44,7 @@
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303091",
+      "kawabou_code": "2127000600006",
       "path": "data/river/403031283303091.json",
       "enabled": true
     },
@@ -49,6 +54,7 @@
       "kind": "river",
       "group": "霞ヶ浦",
       "station_id": "403031283303010",
+      "kawabou_code": "2127000600005",
       "path": "data/river/403031283303010.json",
       "enabled": true
     },
@@ -58,6 +64,7 @@
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303160",
+      "kawabou_code": "2127000600008",
       "path": "data/river/403031283303160.json",
       "enabled": true
     },
@@ -67,6 +74,7 @@
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303181",
+      "kawabou_code": "2127000600017",
       "path": "data/river/403031283303181.json",
       "enabled": true
     },
@@ -76,12 +84,14 @@
       "kind": "river",
       "group": "北浦",
       "station_id": "403031283303191",
+      "kawabou_code": "2127000600007",
       "path": "data/river/403031283303191.json",
       "enabled": true
     },
     {
       "id": "tonegawa_up_upper",
       "station_id": "403031283303141",
+      "kawabou_code": "2127000600010",
       "name": "利根川 河口堰上流",
       "kind": "river",
       "group": "利根川",
@@ -111,6 +121,7 @@
     {
       "id": "tonegawa_down_upper",
       "station_id": "403031283303144",
+      "kawabou_code": "2127000600013",
       "name": "利根川 河口堰下流",
       "kind": "river",
       "group": "利根川",
