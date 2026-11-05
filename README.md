@@ -35,7 +35,7 @@
 | --- | --- | --- |
 | 海面水温 | `jma_engan_area137` / `jma_engan_area138` | 気象庁 沿岸海況(茨城県北部・南部沿岸) |
 | 水道水温 | `manual_tapwater` | 久慈川水系の水道水温(手動記録) |
-| 河川・湖沼水温 | `river_go_jp_wqua_kind5` | 国土交通省 水文水質DBの霞ヶ浦3地点・北浦3地点・利根川2地点 |
+| 河川・湖沼水温 | `river_go_jp_wqua_kind5` | 国土交通省 川の防災情報(毎時取得)の霞ヶ浦3地点・北浦3地点・利根川2地点(旧: 水文水質DB) |
 | 参考データ | `reference_kitaura_chart` | 北浦の参考水温データ(チャート由来、日次平均) |
 
 ## 構成
@@ -51,8 +51,9 @@ data/
 scripts/
   migrate_initial_data.py  # 既存テキスト/CSVをアプリ用JSONへ変換する初回移行スクリプト(初期移行専用・ローカル実行専用)
   update_sea.py            # 気象庁area137/138を取得し data/sea/*.json を再生成
-  update_wqua.py           # 水文水質DB(KIND=5)を取得し data/river/{station_id}.json を更新
-  update_latest_wqua.py    # 河川・湖沼のカード用最新時刻値だけを更新(recordsは変更しない)
+  update_kawabou_qwtr.py   # 川の防災情報の静的JSONから河川・湖沼水温と最新値を毎時更新
+  update_wqua.py           # (停止中・水文水質DB)KIND=5を取得し data/river/{station_id}.json を更新
+  update_latest_wqua.py    # (停止中)河川・湖沼のカード用最新時刻値だけを更新(recordsは変更しない)
   backfill_wqua.py         # 河川・湖沼データを2016年まで段階的に遡及取得
   append_tapwater.py       # GitHub Issue("temp: ...")から水道水温を1件追記
   validate_data.py         # 設定と全データJSONの整合性を検査
@@ -117,9 +118,8 @@ python3 scripts/validate_data.py
 3. 各地点を1日あたり最大28日分、2016-01-01まで段階的にバックフィル
 4. 全JSONを検査してから、成功した更新をまとめてcommit/push
 
-加えて `.github/workflows/update_latest.yml` が毎時35分に、有効な河川・湖沼地点の
-当日・前日データから最新の時刻値だけを取得する。更新対象は
-`meta.latest_observation` のため、グラフ用の日別 `records` は変更しない。海面水温と
+加えて `.github/workflows/update_latest.yml` が毎時23分に、川の防災情報から有効な河川・湖沼地点の
+直近約50時間の毎正時値(日別平均へマージ)と最新時刻値(`meta.latest_observation`)を更新する。海面水温と
 水道水温は時刻値の配信元がないため、カードでも従来の日次最新値を表示する。
 
 外部取得は一時的な通信障害とHTTP 429/5xxを再試行する。特定の区域・地点が
