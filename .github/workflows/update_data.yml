@@ -63,6 +63,11 @@ jobs:
       - name: Update river/lake water temperature (enabled stations)
         id: update_river
         run: |
+          if [ "$(jq -r '.mlit_outage.active // false' config/stations.json)" = "true" ]; then
+            echo "mlit_outage.active is true: skipping MLIT access"
+            echo "failures=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           failures=0
           station_ids=$(jq -r '.series[] | select(.kind=="river" and .enabled==true) | .station_id' config/stations.json)
           if [ -z "$station_ids" ]; then
@@ -84,6 +89,11 @@ jobs:
           BACKFILL_FLOOR: ${{ inputs.backfill_floor || '20160101' }}
           BACKFILL_UNTIL_FLOOR: ${{ inputs.backfill_until_floor || 'false' }}
         run: |
+          if [ "$(jq -r '.mlit_outage.active // false' config/stations.json)" = "true" ]; then
+            echo "mlit_outage.active is true: skipping MLIT access"
+            echo "failures=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           failures=0
           if ! [[ "$BACKFILL_WINDOWS" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::backfill_windows must be a positive integer"

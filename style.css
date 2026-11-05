@@ -11,6 +11,9 @@
   --color-focus-ring: rgba(0, 114, 178, 0.25);
   --color-water-drop: #c5cbd1;
   --color-error: #b42318;
+  --color-outage-bg: #ffe0a3;
+  --color-outage-text: #4a2800;
+  --color-outage-border: #e08a00;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +30,9 @@
     --color-focus-ring: rgba(86, 180, 233, 0.35);
     --color-water-drop: #000000;
     --color-error: #ff8a80;
+  --color-outage-bg: #4a3000;
+  --color-outage-text: #ffe2ad;
+  --color-outage-border: #c27a00;
   }
 }
 
@@ -45,6 +51,9 @@
   --color-focus-ring: rgba(0, 114, 178, 0.25);
   --color-water-drop: #c5cbd1;
   --color-error: #b42318;
+  --color-outage-bg: #ffe0a3;
+  --color-outage-text: #4a2800;
+  --color-outage-border: #e08a00;
 }
 
 :root[data-theme="dark"] {
@@ -60,6 +69,9 @@
   --color-focus-ring: rgba(86, 180, 233, 0.35);
   --color-water-drop: #000000;
   --color-error: #ff8a80;
+  --color-outage-bg: #4a3000;
+  --color-outage-text: #ffe2ad;
+  --color-outage-border: #c27a00;
 }
 
 * {
@@ -1826,4 +1838,27 @@ main {
   .preset-picker > summary::after {
     transition: none;
   }
+}
+
+/* 国交省データ停止中バナー */
+.outage-banner {
+  background: var(--color-outage-bg);
+  color: var(--color-outage-text);
+  border-bottom: 2px solid var(--color-outage-border);
+}
+.outage-banner[hidden] { display: none; }
+.outage-banner-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 8px 16px;
+}
+.outage-banner-title {
+  margin: 0 0 2px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.outage-banner-body {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }

@@ -1,4 +1,5 @@
 {
+  "mlit_outage": {"active": true, "since": "2026-11-04"},
   "series": [
     {
       "id": "sea_area137",

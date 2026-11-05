@@ -319,6 +319,27 @@ var SeriesSelectionLogic = (function () {
     return todayTime - endTime >= 30 * 24 * 60 * 60 * 1000;
   }
 
+  // 国交省データ停止中(mlit_outage.active)は、停止直前まで記録のあった river 系列を
+  // 休止中扱いにしない。最終記録は停止日の前日になるため、7日の猶予を設ける。
+  // 停止前から止まっていた地点は従来どおり休止中判定になる。
+  var OUTAGE_GRACE_DAYS = 7;
+  function isDormantSeries(kind, datasetEnd, outage, today) {
+    if (kind === 'river' && outage && outage.active === true) {
+      var endMatch = String(datasetEnd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      var sinceMatch = String(outage.since || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (endMatch && sinceMatch) {
+        var endTime = Date.UTC(Number(endMatch[1]), Number(endMatch[2]) - 1, Number(endMatch[3]));
+        var sinceTime = Date.UTC(Number(sinceMatch[1]), Number(sinceMatch[2]) - 1, Number(sinceMatch[3]));
+        if (endTime >= sinceTime - OUTAGE_GRACE_DAYS * 24 * 60 * 60 * 1000) return false;
+      }
+    }
+    return isDormantDatasetEnd(datasetEnd, today);
+  }
+
+  function isOutageActive(outage) {
+    return !!(outage && outage.active === true);
+  }
+
   function groupSelectionState(series, selectedIds, availableIds) {
     var selected = {};
     var available = {};
@@ -356,6 +377,8 @@ var SeriesSelectionLogic = (function () {
     loadSelectedSeriesIds: loadSelectedSeriesIds,
     saveSelectedSeriesIds: saveSelectedSeriesIds,
     isDormantDatasetEnd: isDormantDatasetEnd,
+    isDormantSeries: isDormantSeries,
+    isOutageActive: isOutageActive,
     groupSelectionState: groupSelectionState
   };
 })();
@@ -839,6 +862,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // ---- アプリ状態 ----
   var stationsConfig = [];         // config/stations.json の series 配列
+  var mlitOutage = null;           // config/stations.json の mlit_outage
   var seriesData = {};             // id -> { config, meta, records, color, loaded, error }
   var currentMode = 'timeseries';
   var currentRange = '1y';
@@ -1266,6 +1290,21 @@ if (typeof module !== 'undefined' && module.exports) {
 
   // ---- データ読み込み ----
 
+  function renderOutageBanner() {
+    var banner = document.getElementById('mlit-outage-banner');
+    if (!banner) return;
+    var active = SeriesSelectionLogic.isOutageActive(mlitOutage);
+    banner.hidden = !active;
+    if (!active) return;
+    var m = String((mlitOutage && mlitOutage.since) || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    var sinceText = m ? m[1] + '年' + Number(m[2]) + '月' + Number(m[3]) + '日' : '';
+    var body = document.getElementById('mlit-outage-body');
+    if (body && sinceText) {
+      body.textContent = '国土交通省 水文水質データベースが自動取得を制限したため、' + sinceText +
+        '以降、霞ヶ浦・北浦・利根川の水温は更新されていません。表示中の値は停止前の最終データです。海面水温と水道水温は通常どおり更新しています。';
+    }
+  }
+
   function loadStationsConfig() {
     return fetch('config/stations.json')
       .then(function (res) {
@@ -1275,6 +1314,8 @@ if (typeof module !== 'undefined' && module.exports) {
         return res.json();
       })
       .then(function (json) {
+        mlitOutage = json.mlit_outage || null;
+        renderOutageBanner();
         stationsConfig = (json.series || []).filter(function (s) { return !s.hidden; });
         return stationsConfig;
       });
@@ -1297,8 +1338,10 @@ if (typeof module !== 'undefined' && module.exports) {
           meta: json.meta || {},
           records: records,
           loaded: records.length > 0,
-          dormant: SeriesSelectionLogic.isDormantDatasetEnd(
-            json.meta && json.meta.dataset_end
+          dormant: SeriesSelectionLogic.isDormantSeries(
+            station.kind,
+            json.meta && json.meta.dataset_end,
+            mlitOutage
           ),
           error: false
         };
