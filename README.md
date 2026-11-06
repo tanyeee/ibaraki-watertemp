@@ -111,7 +111,7 @@ python3 scripts/validate_data.py
 
 ## 自動更新と障害時の挙動
 
-`.github/workflows/update_data.yml` が毎日6:10(JST)に次を実行する。
+`.github/workflows/update_data.yml` が毎日13:10(JST)に次を実行する（気象庁の海面水温の前日分が昼ごろに公開されるため）。
 
 1. 海面水温2区域を全量更新
 2. `config/stations.json` で有効な河川・湖沼地点の直近14日を更新
