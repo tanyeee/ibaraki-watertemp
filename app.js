@@ -822,6 +822,17 @@ var NormalBandLogic = (function () {
   };
 })();
 
+// 両比較モードで測定点の大きさを統一する（CSS px）。
+function measurementMarkerStyle(manual, visible, darkMode) {
+  return {
+    pointRadius: manual ? 3.5 : (visible ? 1.5 : 0),
+    pointBorderWidth: manual ? 1 : 0,
+    pointBorderColor: darkMode ? '#1b2229' : '#ffffff',
+    pointHitRadius: 6,
+    pointHoverRadius: manual ? 5 : 4
+  };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = YearlyComparisonLogic;
   module.exports.SeriesSelectionLogic = SeriesSelectionLogic;
@@ -833,6 +844,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports.CardLayoutLogic = CardLayoutLogic;
   module.exports.LatestCardLogic = LatestCardLogic;
   module.exports.ComparisonPreferenceLogic = ComparisonPreferenceLogic;
+  module.exports.measurementMarkerStyle = measurementMarkerStyle;
 }
 
 (function () {
@@ -2057,23 +2069,32 @@ if (typeof module !== 'undefined' && module.exports) {
     var points = filtered.map(function (r) {
       return {
         x: parseDate(r.date),
+        origDate: r.date,
         y: r.value,
         note: r.note || null,
         seriesName: station.name
       };
     });
     var showLine = currentTsPlotStyle === 'standard';
-    return {
+    var lineWidth = narrowScreenMedia.matches ? 1 : 2;
+    var dataset = {
       label: station.name,
       data: points,
       showLine: showLine,
       spanGaps: showLine,
-      borderWidth: showLine ? 1 : 0,
-      pointRadius: showLine ? (narrowScreenMedia.matches ? 0.25 : 1) : (narrowScreenMedia.matches ? 1.5 : 2.5),
+      borderWidth: showLine ? lineWidth : 0,
+      segment: showLine ? yearlySegments(lineWidth) : undefined,
+      tension: showLine ? 0.2 : 0,
+      pointRadius: narrowScreenMedia.matches ? 1.5 : 2.5,
       pointHoverRadius: 4,
       backgroundColor: entry.color,
       borderColor: entry.color
     };
+    if (showLine) {
+      Object.assign(dataset, measurementMarkerStyle(station.kind === 'tapwater', true, isDarkMode));
+      dataset.pointBackgroundColor = entry.color;
+    }
+    return dataset;
   }
 
   // 場所比較モードの「1月始まり」。当年1月から12月末まで表示する。
@@ -2947,24 +2968,19 @@ if (typeof module !== 'undefined' && module.exports) {
       var points = (entry.yearlyRecordsByYear[year] || []).filter(inPeriod).map(function (record) {
         return yearlyPoint(record, year);
       });
-      datasets.push({
+      datasets.push(Object.assign({
         label: year + '年',
         data: points,
         type: 'line',
         showLine: true,
         spanGaps: false,
-        pointRadius: manualMeasurements ? 3.5 : (showMarkers || points.length === 1 ? 1.5 : 0),
-        pointBorderWidth: manualMeasurements ? 1 : 0,
-        pointBorderColor: isDarkMode ? '#1b2229' : '#ffffff',
         pointBackgroundColor: color,
-        pointHitRadius: 6,
-        pointHoverRadius: manualMeasurements ? 5 : 4,
         borderWidth: narrowScreenMedia.matches ? 1 : 2,
         segment: yearlySegments(narrowScreenMedia.matches ? 1 : 2),
         tension: 0.2,
         backgroundColor: color,
         borderColor: color
-      });
+      }, measurementMarkerStyle(manualMeasurements, showMarkers || points.length === 1, isDarkMode)));
     });
 
     var chartPlugins = themedPlugins({
