@@ -8,6 +8,49 @@ var latestCards = appLogic.LatestCardLogic;
 var dateRanges = appLogic.DateRangeLogic;
 var comparisonPrefs = appLogic.ComparisonPreferenceLogic;
 
+[false, true].forEach(function (darkMode) {
+  var manual = appLogic.measurementMarkerStyle(true, true, darkMode);
+  assert.equal(manual.pointRadius, 3.5);
+  assert.equal(manual.pointBorderWidth, 1);
+  assert.equal(manual.pointBorderColor, darkMode ? '#1b2229' : '#ffffff');
+  assert.equal(manual.pointHitRadius, 6);
+  assert.equal(appLogic.measurementMarkerStyle(true, false, darkMode).pointRadius, 3.5);
+  assert.equal(appLogic.measurementMarkerStyle(false, true, darkMode).pointRadius, 1.5);
+  assert.equal(appLogic.measurementMarkerStyle(false, false, darkMode).pointRadius, 0);
+});
+
+// 実際の場所比較データセット生成をPC/スマホ双方の設定で検証する。
+var vm = require('node:vm');
+var source = require('node:fs').readFileSync(require.resolve('../app.js'), 'utf8');
+var datasetBuilder = source.slice(source.indexOf('  function buildTimeseriesDataset('), source.indexOf('  // 場所比較モードの「1月始まり」'));
+var segmentBuilder = source.slice(source.indexOf('  function yearlySegments('), source.indexOf('  function initYearlyPeriodControls('));
+[false, true].forEach(function (narrow) {
+  var context = {
+    seriesData: { test: { records: [{ date: '2026-11-01', value: 20 }, { date: '2026-11-03', value: 19 }], color: '#123456' } },
+    filterByRange: function (records) { return records; },
+    parseDate: function (date) { return new Date(date); },
+    currentTsPlotStyle: 'standard', narrowScreenMedia: { matches: narrow }, isDarkMode: true,
+    measurementMarkerStyle: appLogic.measurementMarkerStyle, YearlyComparisonLogic: appLogic
+  };
+  vm.createContext(context);
+  vm.runInContext(datasetBuilder + segmentBuilder, context);
+  var dataset = context.buildTimeseriesDataset({ id: 'test', name: 'test', kind: 'tapwater' }, {});
+  assert.equal(dataset.pointRadius, 3.5);
+  assert.equal(dataset.borderWidth, narrow ? 1 : 2);
+  var segmentContext = { chart: { data: { datasets: [dataset] } }, datasetIndex: 0, p0DataIndex: 0, p1DataIndex: 1 };
+  assert.equal(dataset.segment.borderDash(segmentContext).join(','), '3,3');
+  assert.equal(dataset.segment.borderWidth(segmentContext), 0.75);
+  dataset.data[1].origDate = '2026-11-02';
+  assert.equal(dataset.segment.borderDash(segmentContext).length, 0);
+  assert.equal(dataset.segment.borderWidth(segmentContext), narrow ? 1 : 2);
+  assert.equal(context.buildTimeseriesDataset({ id: 'test', kind: 'river' }, {}).pointRadius, 1.5);
+  context.currentTsPlotStyle = 'dots';
+  dataset = context.buildTimeseriesDataset({ id: 'test', kind: 'tapwater' }, {});
+  assert.equal(dataset.showLine, false);
+  assert.equal(dataset.pointRadius, narrow ? 1.5 : 2.5);
+  assert.equal(dataset.segment, undefined);
+});
+
 var preferenceDefaults = { mode: 'timeseries', seriesId: null, years: null, period: null };
 assert.deepEqual(comparisonPrefs.load(null), preferenceDefaults);
 assert.deepEqual(comparisonPrefs.normalize({ mode: 'invalid', period: { start: ['06-01'], end: '09-30' } }), preferenceDefaults);
